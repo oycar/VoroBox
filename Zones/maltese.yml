@@ -1,0 +1,63 @@
+--- # Maltese.Yml
+
+#
+# Triangulate a cross with a central point that
+# will appear in the same loop multiple times
+#
+name: maltese
+conformingTo: Delaunay
+
+# Default global properties
+properties:
+  randomDensity: 100
+  distinct: false
+  
+# inverted cross
+# Example of using labels and yaml anchors together to give input flexibility
+points: {
+ o  : &o [0, 0],
+ u1 : &u1 [0.70710678118654757, 1.70710678118654757],
+ u2 : &u2 [0, 1.0],
+ u3 : &u3 [-0.70710678118654757, 1.70710678118654757],
+ l1 : &l1 [-1.70710678118654757, 0.70710678118654757],
+ l2 : &l2 [-1.0, 0.0],
+ l3 : &l3 [-1.70710678118654757, -0.70710678118654757],
+ d1 : &d1 [-0.70710678118654757, -1.70710678118654757],
+ d2 : &d2 [0, -1.0],
+ d3 : &d3 [0.70710678118654757, -1.70710678118654757],
+ r1 : &r1 [1.70710678118654757, -0.70710678118654757],
+ r2 : &r2 [1.0, 0.0],
+ r3 : &r3 [1.70710678118654757,  0.70710678118654757],
+ a  : [-2, -2],
+ b  : [0, -2],
+ c  : [2, -2],
+ d  : [2, 0],
+ e  : [2, 2],
+ f  : [0, 2],
+ g  : [-2, 2],
+ h  : [-2, 0]
+}
+
+zones:
+  # Define an inverted Maltese cross
+  # use the labels
+  - list: [a, b, d2, d1, o, l3, l2, h]
+  - list: [c, d, r2, r1, o, d3, d2, b]
+    properties:
+      randomDensity: 1000
+      distinct: true
+  - list: [e, f, u2, u1, o, r3, r2, d]
+  - list: [g, h, l2, l1, o, u3, u2, f]
+    properties:
+      randomDensity: 400
+    
+  # Define an offset Maltese cross
+  # because we are applying an offset use the anchors
+  - polygon: [*o, *u1, *u2, *u3]
+    origin: [4, 0]
+  - polygon: [*o, *l1, *l2, *l3]
+    origin: [4, 0]
+  - polygon: [*o, *d1, *d2, *d3]
+    origin: [4, 0]
+  - polygon: [*o, *r1, *r2, *r3]
+    origin: [4, 0]

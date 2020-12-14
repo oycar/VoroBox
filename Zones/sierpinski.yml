@@ -1,0 +1,294 @@
+--- # Sierpinski.Yml
+
+#
+# Introduce a simple test file 
+#
+name: sierpinski
+  
+zones:
+  # Messy but works
+  # First Block
+  
+  # Zero Block
+  - polygon: [ &a [0.5, 0], &b [0, &y 0.8660], &c [-0.5, 0.0]]
+    properties: &p
+      randomDensity: 100
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [1.0, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [0.5, *y]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [2, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [3, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [2.5, *y]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [1, &y2 1.732]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [2, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [1.5, &y3 2.598]
+
+  # Next block => +4
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4.5, *y]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [7, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6.5, *y]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5.5, *y3]
+
+  # Next block => +2,+4
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [2, &y4 3.464]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [3, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [2.5, &y5 4.33]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4.5, *y5]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [3, &y6 5.196]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4, *y6]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [3.5, &y7 6.062]
+    
+    # Next Super Block
+    # ==> [+8, 0]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8.5, *y]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [11, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10.5, *y]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9.5, *y3]
+
+  # Next block => +4
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [12, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [13, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [12.5, *y]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [14, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [15, 0]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [14.5, *y]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [13, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [14, *y2]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [13.5, *y3]
+
+  # Next block => +2,+4
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [11, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10.5, *y5]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [12, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [13, *y4]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [12.5, *y5]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [11, *y6]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [12, *y6]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [11.5, *y7]
+
+
+ # Next Super Block
+    # ==> [+4, +8]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4, &y8 6.928]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [4.5, &y9 7.794]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [7, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6.5, *y9]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5, &y10 8.66]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6, *y10]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [5.5, &y11 9.526]
+
+  # Next block => +4
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8.5, *y9]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [11, *y8]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10.5, *y9]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9, *y10]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [10, *y10]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9.5, *y11]
+
+  # Next block =>
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6, &y12 10.392]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [7, *y12]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [6.5, &y13 11.258]
+    
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8, *y12]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [9, *y12]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8.5, *y13]
+
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [7, &y14 12.124]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [8, *y14]
+  - polygon: [ *a, *b , *c]
+    properties: *p
+    origin: [7.5, &y15 12.99]
