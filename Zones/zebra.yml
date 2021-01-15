@@ -12,10 +12,8 @@ zones:
        j, k,  l,  m,  n,
        o,  p,  q,  r]
     properties:
-      # Zero is the same as no entry
-      randomDensity: 0
-      # Some debugging 
-      showMe: 1
+      randomDensity: 1000
+      showMe: 0
 
 points: {
 a : [10, 7],  b : [12, 3],  c : [20, 8],  d : [13, 17],
