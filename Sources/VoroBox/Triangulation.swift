@@ -77,7 +77,7 @@ internal let orientThreshold:Double = circleThreshold
 
 
 internal let HomeFolder = ProcessInfo.processInfo.environment["HOME"] ?? "/Users/nemo"
-internal let ProjectFolder = HomeFolder + "/CloudStation/Projects/TriSwift"
+internal let ProjectFolder = HomeFolder + "/CloudStation/Projects/VoroBox"
 internal let ZoneFolder = ProjectFolder + "/Zones"
 internal let OutputFolder = ProjectFolder + "/Output"
 internal var showCount = 0
@@ -1211,7 +1211,7 @@ extension Triangulation {
       // So the stop vertex is g or 'loopStop'
       var loopStop = EmptyVertex // Not initialized yet
  
-      showLoop(label: "Initial Loop \(iº)", f)
+      if showMe > 1 { showLoop(label: "Initial Loop \(iº)", f) }
 
       
       // Get the next index and hub
@@ -1279,7 +1279,7 @@ extension Triangulation {
         // fº + 1 is the edge h -> rº
         let fº = addVertex(outside: f, vertex: rº)
         
-        if showMe != 0 { showLoop(label: "Added Vertex => \(rº)", fº+2) }
+        if showMe > 1 { showLoop(label: "Added Vertex => \(rº)", fº+2) }
         showVoronoi(label: "fo_", type: "Delaunay")
 
   
@@ -1288,8 +1288,6 @@ extension Triangulation {
         // eº + 2 is the edge sº -> h
         let eº = addVertex(outside: e, vertex: sº)
  
-
-        
         // The values of e & f can be updated here
         e = eº + 1
         f = fº + 2
@@ -1309,12 +1307,11 @@ extension Triangulation {
           Triangulation.loopHooks[sº] = rº
         }
     
-        if showMe != 0 {
+        if showMe > 1 {
           showLoop(label: "Added Vertex => \(sº)", eº+1)
         }
         showVoronoi(label: "fo_", type: "Delaunay")
 
-        
         // The triangulation is no longer locally Delaunay
         var trackedEdges = Array<Int>([e, f])
         
@@ -1330,7 +1327,7 @@ extension Triangulation {
           f = trackedEdges[1]
         }
         
-        if showMe != 0 { showLoop(label: "Flipped Vertex => \(rº)", f) }
+        if showMe > 1 { showLoop(label: "Flipped Vertex => \(rº)", f) }
         showVoronoi(label: "fo_", type: "Delaunay")
 
         // Convex corner
@@ -1340,9 +1337,8 @@ extension Triangulation {
             f = trackedEdges[1]
           }
           
-          if showMe != 0 { showLoop(label: "Flipped Vertex => \(sº)", f) }
+          if showMe > 1 { showLoop(label: "Flipped Vertex => \(sº)", f) }
           showVoronoi(label: "fo_", type: "Delaunay")
-
         }
         
         // Add the internal vertices
@@ -1394,7 +1390,7 @@ extension Triangulation {
           f = trackedEdges[1]
         }
         
-        if showMe != 0 { showLoop(label: "Flipped Vertex => \(pº)", f) }
+        if showMe > 1 { showLoop(label: "Flipped Vertex => \(pº)", f) }
         showVoronoi(label: "fo_", type: "Delaunay")
 
         // Add qº near the outgoing edge
@@ -1417,7 +1413,7 @@ extension Triangulation {
           }
           showVoronoi(label: "fo_", type: "Delaunay")
           
-          if showMe != 0 { showLoop(label: "Flipped Vertex => \(qº)", f) }
+          if showMe > 1 { showLoop(label: "Flipped Vertex => \(qº)", f) }
         }
         
         // Anticlockwise search for an edge connected to the hub h
@@ -1458,7 +1454,7 @@ extension Triangulation {
         // remove this vertex
         try! removeVertex(from: hubEdge)
         
-        if showMe != 0 { showLoop(label: "Removed Vertex => \(list[hIndex])", a) }
+        if showMe > 1 { showLoop(label: "Removed Vertex => \(list[hIndex])", a) }
 
         // Get next edge
         e = a
@@ -2130,38 +2126,7 @@ extension Triangulation {
       return ha
     }
     
-    // Remove a triangle
-    // New version
-    func removeTriangle(_ a:Int, _ a0:Int) {
-      if showMe > 0 {
-        print("Removing triangle \(a0))")
-      }
-      for i in 0...2 {
-        // The internal edge
-        let e = a0 + (a + i) % 3
-        
-        // Unlink spokes
-        if 1 != i {
-          let b = unlink(e)
-          if showMe > 0 {
-            print("\tUnlink edge \(e) outer edge => \(b)]")
-          }
-        } else {
-          // Doesn't unlink the shell
-          shellEdges.append(e)
-        }
-
-      } // End each edge
-      
-      // Save removed triangle id
-      emptyTriangles.insert(a0)
-    } // End of removeTriangle
-    
     // Remove any vertex from the triangulation
-    // The vertex being removed
-    if showMe > 0 {
-      print("Remove Vertex => \(vertices[startEdge])")
-    }
     
     // The initial edge
     var a = startEdge
@@ -2178,7 +2143,6 @@ extension Triangulation {
     
     // And a list of the corresponding edges
     var shellEdges = Array<Int>()
-    
     
     // Go anticlockwise starting at p
     //
@@ -2274,8 +2238,8 @@ extension Triangulation {
       // Stop here if edge wasn't disconnected (it will have been)
     } while a2 != stopEdge
 
-    if showMe > 0 {
-      print("Shell")
+    if showMe > 2 {
+      print("Remove Vertex => \(vertices[startEdge])")
       print("\tShell Edges    => \(shellEdges)")
       print("\tShell Vertices => \(shellVertices)")
       print("\tShell Code     => \(shellEdges.map({halfEdges[$0]}))")
@@ -2288,24 +2252,6 @@ extension Triangulation {
     //
     // When the removed vertex (h) is on the loop (ie a convex hub) the
     // number of shellCodes will be one less than the number of shellVertices
-    //
-    // Fix the loopEdges -
-    //
-    //      \ *in (prev)
-    //       7....6...5
-    //        \        .   *out (next)
-    //         \        . /
-    //          h        4
-    //         /         |
-    //        /          |
-    //       0           3- *in  (prev)
-    //        \         .
-    //         \       .
-    //          1-----2
-    //               / *out (next)
-    //
-    //   Above example has a shellVertices.count == 8
-    //                       shellCodes.count  == 7
     //
     
     
@@ -2349,48 +2295,12 @@ extension Triangulation {
       // Possible options
       // I*I, B*I, F*I
       if h > BoundaryEdge {
-        // Type F*I
-//        if d <= BoundaryEdge {
-//          // Type F*I
-//          Triangulation.hullNext[h] = g
-//          Triangulation.hullPrev[g] = h
-//          if showMe > 0 {
-//            print("\t\(j) F*I Turn  \(h) into a boundary")
-//          }
-//        } else if g <= BoundaryEdge {
-//          // Type B*I
-//          let n = Triangulation.hullNext[d]!
-//          Triangulation.hullNext[h] = n
-//          Triangulation.hullPrev[n] = h
-//
-//          if showMe > 0 {
-//            print("\t\(j) B*I Connect \(h) to output \(n)")
-//          }
-//
-//          // Can delete d
-//          Triangulation.hullNext[d] = nil
-//          Triangulation.hullPrev[d] = nil
-//        } else if 0 == j {
-//          // Type I*I
-//          Triangulation.hullNext[h] = g
-//          Triangulation.hullPrev[g] = h
-//          if showMe > 0 {
-//            print("\t\(j) I*I Connect \(h) to last edge \(g)")
-//          }
-//        } else  {
-//          // I*I can only occur on first call
-//          throw triangulationError.initError("Found unexpected edge pair status")
-//        }
-        
+        // Type F*I 
         if g <= BoundaryEdge {
           // Type B*I
           let n = Triangulation.hullNext[d]!
           Triangulation.hullNext[h] = n
           Triangulation.hullPrev[n] = h
-          
-          if showMe > 0 {
-            print("\t\(j) B*I Connect \(h) to output \(n)")
-          }
           
           // Can delete d
           Triangulation.hullNext[d] = nil
@@ -2398,10 +2308,7 @@ extension Triangulation {
         } else if d <= BoundaryEdge || 0 == j {
           // Type F*I or I*I
           Triangulation.hullNext[h] = g
-          Triangulation.hullPrev[g] = h
-          if showMe > 0 {
-            print("\t\(j) (F|I)*I Turn  \(h) into a boundary")
-          }
+          Triangulation.hullPrev[g] = h          
         } else  {
           // I*I can only occur on first call
           throw triangulationError.initError("Found unexpected edge pair status")
@@ -2409,8 +2316,9 @@ extension Triangulation {
         
         // Set the edge code
         halfEdges[h] = externalCode
-        d = externalCode
-        
+
+        // Update edge
+        d = externalCode        
       } else {
         // Type *B
         if d <= BoundaryEdge {
@@ -2418,18 +2326,10 @@ extension Triangulation {
           let p = Triangulation.hullPrev[e]!
           Triangulation.hullPrev[g] = p
           Triangulation.hullNext[p] = g
-          if showMe > 0 {
-            print("\t\(j) F*B Connect \(g) to input \(p)")
-          }
         } else if g <= BoundaryEdge {
-          // Type B*B
-          // Can delete d (previous boundary) from loop
-          if showMe > 0 {
-            print("\t\(j) B*B delete \(d)")
-          }
-          
-          // Can delete d (unless first call)
           if 0 != j {
+            // Type B*B          
+            // Can delete d (unless first call)
             Triangulation.hullNext[d] = nil
             Triangulation.hullPrev[d] = nil
           }
@@ -2437,6 +2337,8 @@ extension Triangulation {
           // Nothing to do for B*B; I*B should be impossble
           throw triangulationError.initError("Found unexpected edge pair status")
         }
+
+        // Update edge
         d = e
       }
       
@@ -2451,7 +2353,7 @@ extension Triangulation {
       Triangulation.hullPrev[d] = nil
     }
     
-    if showMe > 0 {
+    if showMe > 2 {
       print("Removed Vertex \(vertices[startEdge])")
       //showVoronoi(label: "rv_", type:"Delaunay")
     }
@@ -3898,276 +3800,3 @@ func perpendicular(scale r2:Double, _ cx:Double, _ cy:Double, _ ax:Double, _ ay:
 func isZero(_ x: Double) -> Bool {
   return (x <= Epsilon) && (x >= -Epsilon)
 }
-
-/*
- func newOneBoundary() {
- let x = lastBoundaryEdge
- 
- // One outer edge to remove (at x) - two to add
- let x1 = (x + 1) % 3
- let x2 = (x + 2) % 3
- 
- // When one edge is a boundary there is a single vertex opposing this edge
- let q = vertices[a0 + x2]
- 
- // In general q can be one several loops
- // But can only be on several loops if it is a hub
- // And if it is a hub it will soon be removed
- //
- // So need only consider the current loop
- 
- // Is q on this loop?
- var e = a0 + x
- repeat {
- e = Triangulation.hullNext[e]!
- if q == vertices[e] {
- break
- }
- } while e != a0 + x
- 
- // First step is patch in new edges
- //
- //       p
- //      /.
- //  O1 / .   Here removing spoke x connecting h to p
- //    /  .   simply adds O2 and O1 to the loop
- //   q x .
- //    \  .
- //     \ .
- //   O2 \.
- //       h
- 
- 
- // Next step is to patch it in to another loop if needed
- if e != a0 + x {
- // q is on the same loop
- // This creates a new loop
- //
- //   |   p
- //   |O1/.
- //A1 | / .   Here removing spoke x connecting h to p makes
- //   |/  .   vertex q == vertices[x2] more polyvalent
- //   q x .   by splitting a loop into two
- //   |\  .   After:
- //A2 | \ .   A1 -> O1; O2 -> A2
- //   |O2\.
- //   |   h
- 
- // This splits this loop into two :(
- loopEdges(edge: outerEdges[x1], replaces: a0 + x)
- loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
- // Splice this in
- loopEdges(splice: outerEdges[x1], at: e)
- } else {
- loopEdges(edge: outerEdges[x1], replaces: a0 + x)
- loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
- }
- }
- */
-
-/*
-// Remove a triangle
-// Old version
-func removeTriangle(_ a:Int, _ a0:Int) -> Int {
-  var externalCode = EmptyEdge // The default boundary code
-  
-  // Unlink half edges
-  var numberBoundaries = 0
-  var lastBoundaryEdge = -1, lastInternalEdge = -1
-  var outerEdges = Array<Int>(repeating: 0, count: 3)
-  for i in 0...2 {
-    let b = unlink(a0 + i)
-    outerEdges[i] = b
-    
-    // Record which boundaries were which
-    if b <= BoundaryEdge {
-      lastBoundaryEdge = i
-      numberBoundaries += 1
-      
-      // The boundary code - save a new
-      // code, conforming edges have
-      // an odd code which will be unique
-      // non-conforming may not be unique
-      // but are equivalent
-      
-      // Always save an odd (Voronoi conforming) code
-      // If saved code is even (Delaunay conforming) save the minimum
-      if 1 == b % 2 || (0 == externalCode % 2 && b < externalCode) {
-        externalCode = b
-      }
-    } else {
-      lastInternalEdge = i
-    }
-  } // End of outerEdges
-  
-  // outerEdges records the
-  // neighbouring half edge - unless its a boundary
-  if showMe > 2 {
-    print("\tRemove Triangle")
-    for i in 0...2 {
-      print("\t\tv => \(vertices[a0 + i]) e => \(a0+i)")
-    }
-    
-    print("\t\tBoundaries => \(numberBoundaries)")
-    print("\t\tLast Internal => \(lastInternalEdge)")
-    print("\t\tLast External => \(lastBoundaryEdge)")
-  }
-  
-  // Adjust the loop edges
-  if numberBoundaries == 1 {
-    let x = lastBoundaryEdge
-    
-    // One outer edge to remove (at x) - two to add
-    let x1 = (x + 1) % 3
-    let x2 = (x + 2) % 3
-    
-    // So is q already in the triangulation hull?
-    let q = vertices[a0 + x2]
-    if showMe > 2 {
-      print("\t\t One Existing Boundary")
-    }
-    
-    
-    var loopList = Triangulation.hullNext.compactMap { q == vertices[$0.key] ? $0.key : nil }
-    
-    // Monovalent loop - simple
-    //
-    //       p
-    //      /.
-    //  O1 / .   Here removing spoke x connecting h to p
-    //    /  .   simply adds O2 and O1 to the loop
-    //   q x .
-    //    \  .
-    //     \ .
-    //   O2 \.
-    //       h
-    // Replace
-    loopEdges(edge: outerEdges[x1], replaces: a0 + x)
-    loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
-    
-    // When a triangle is cut away it can either change  the current loop
-    // by adding one more boundary edge to it OR
-    // it can split a loop into two loops
-    //
-    //   |   p
-    //   |  /.
-    //   | / .   Here removing spoke x connecting h to p makes
-    //   |/  .   vertex q == vertices[x2] more polyvalent
-    //   q x .   by splitting a loop into two
-    //   |\  .   After:
-    //   | \ .   A1 -> O1; O2 -> B1
-    // LL|  \.
-    //   |   h   This will be different for internal loops...
-    if !loopList.isEmpty {
-      var listIndex = 0
-      
-      // Is this already a polyvalent loop?
-      if loopList.count > 1 {
-        // This is more tricky
-        // Polyvalent loop - need to identify correct outgoing edge fom q
-        // Which is the one that makes
-        // the sharpest right turn relative to x1
-        loopList.append(outerEdges[x1])
-        
-        // Sort the edges by orientation
-        let q = vertices[a0 + x1]
-        let qx = Triangulation.coords[2 * q], qy = Triangulation.coords[2 * q + 1]
-        loopList.sort {
-          let a = vertices[$0]
-          let b = vertices[$1]
-          let ax = Triangulation.coords[2 * a]
-          let ay = Triangulation.coords[2 * a + 1]
-          let bx = Triangulation.coords[2 * b]
-          let by = Triangulation.coords[2 * b + 1]
-          
-          // Get the relative orientation
-          return orient(ax, ay, bx, by, qx, qy)
-        }
-        
-        // Where is the new edge
-        listIndex = loopList.firstIndex(of: outerEdges[x1])!
-        
-        // We need the one before this
-        listIndex = listIndex > 0 ? listIndex - 1: loopList.count - 1
-      } // Polyvalent loop
-      
-      // Splice this in
-      loopEdges(splice: outerEdges[x1], at: loopList[listIndex])
-    }
-    
-    
-  } else if numberBoundaries == 2 {
-    let x = lastInternalEdge
-    
-    // One outer edge to add (at x) - two to remove
-    let x1 = (x + 1) % 3
-    let x2 = (x + 2) % 3
-    
-    // Are both boundaries in the new loop?
-    // This requires both to be spokes
-    // And x1 is the stopEdge
-    // So x2 must be the other spoke
-    
-    if vertices[a0 + x2] != h {
-      //
-      // In this case the vertex q is already polyvalent
-      //
-      //   |   /
-      // A1|  / A2       Before:
-      //   | /           A1->A2; x1 -> O2; O2->B2
-      //   |/  O2 == B1
-      //   q.......p
-      //   |\     .      After
-      //   |O\   .       A1 -> A2; O->B2
-      // B2|  \ . x1
-      //   |   h
-      
-      //    replace O2 (== B1) with O; delete x1
-      //
-      loopEdges(edge: outerEdges[x], replaces: a0 + x2)
-      loopEdges(delete: a0 + x1)
-      
-    } else {
-      // Monovalent case
-      //
-      //       /
-      //      / A2        Before
-      //     /            O1->A2
-      //    /
-      //   q.......p
-      //    \     .       After
-      //   O \   .        O->A2
-      //      \ .
-      //       h          Replace O1 with O; delete O2
-      loopEdges(edge: outerEdges[x], replaces: a0 + x1)
-      loopEdges(delete: a0 + x2)
-    }
-  } else if 3 == numberBoundaries {
-    // Remove all the loop edges
-    // No splice needed
-    
-    loopEdges(delete: a0)
-    loopEdges(delete: a0 + 1)
-    loopEdges(delete: a0 + 2)
-  } else {
-    // Zero boundaries already present
-    // Can only occur on first call
-    // Initialize a loop with three new boundaries
-    //
-    for i in 0...2 {
-      let x = outerEdges[i]
-      let x1 = outerEdges[(i + 1) % 3]
-      let x2 = outerEdges[(i + 2) % 3]
-      
-      // This is a reflex hull - a hole - so indices run clockwise
-      Triangulation.hullNext[x] = x2;  Triangulation.hullPrev[x] = x1
-    }
-  }
-  
-  // Save removed triangle id
-  emptyTriangles.insert(a0)
-  
-  // Return the external code
-  return externalCode
-} // End of removeTriangle
-*/
