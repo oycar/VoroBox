@@ -112,6 +112,7 @@ extension Zone {
       if nil != p.showMe { showMe = p.showMe! }
     }
     
+    
     // Set the zone code
     code = 2 * Zone.zoneID
 
@@ -533,6 +534,17 @@ extension Zone {
   
   // Returns the orientation of a triangle of polygon vertices i, j, k
   // Convex vertices will be positive
+//  func orientation(_ i: Int, _ j:Int, _ k:Int) -> Double {
+//    // Returns +1 for positive (left hand turn)
+//    //          0 for colinear
+//    //         -1 for negative (right hand turn)
+//    let a = 2 * zoneIndices[(i + polygonCount) % polygonCount]
+//    let b = 2 * zoneIndices[(j + polygonCount) % polygonCount]
+//    let c = 2 * zoneIndices[(k + polygonCount) % polygonCount]
+//    return orientIfSure(Triangulation.coords[a], Triangulation.coords[a + 1],
+//                        Triangulation.coords[b], Triangulation.coords[b + 1],
+//                        Triangulation.coords[c], Triangulation.coords[c + 1])
+//  }
   func orientation(_ i: Int, _ j:Int, _ k:Int) -> Double {
     // Returns +1 for positive (left hand turn)
     //          0 for colinear

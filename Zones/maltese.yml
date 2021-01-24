@@ -8,7 +8,7 @@ name: maltese
 
 # Default global properties
 properties: &globalProperties
-  randomDensity: 10000
+  randomDensity: 1000
   distinct: false
   showMe: 0
   

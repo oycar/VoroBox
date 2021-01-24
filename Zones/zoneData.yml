@@ -1,59 +1,22 @@
---- # Maltese.Yml
+--- # Zebra.Yml
 
 #
-# Triangulate a cross with a central point that
-# will appear in the same loop multiple times
+# Triangulate a reflex zone
 #
-name: maltese
-
-# Default global properties
-properties: &globalProperties
-  randomDensity: 1000
-  distinct: false
-  showMe: 0
-  
-# inverted cross
-# Example of using labels and yaml anchors together to give input flexibility
-points: {
- o  : &o [0, 0],
- u1 : &u1 [0.70710678118654757, 1.70710678118654757],
- u2 : &u2 [0, 1.0],
- u3 : &u3 [-0.70710678118654757, 1.70710678118654757],
- l1 : &l1 [-1.70710678118654757, 0.70710678118654757],
- l2 : &l2 [-1.0, 0.0],
- l3 : &l3 [-1.70710678118654757, -0.70710678118654757],
- d1 : &d1 [-0.70710678118654757, -1.70710678118654757],
- d2 : &d2 [0, -1.0],
- d3 : &d3 [0.70710678118654757, -1.70710678118654757],
- r1 : &r1 [1.70710678118654757, -0.70710678118654757],
- r2 : &r2 [1.0, 0.0],
- r3 : &r3 [1.70710678118654757,  0.70710678118654757],
- a  : [-2, -2],
- b  : [0, -2],
- c  : [2, -2],
- d  : [2, 0],
- e  : [2, 2],
- f  : [0, 2],
- g  : [-2, 2],
- h  : [-2, 0]
-}
-
+name: zebra
 zones:
-  # Define an inverted Maltese cross
-  # use the labels
-  - list: [a, b, d2, d1, o, l3, l2, h]
-  - list: [c, d, r2, r1, o, d3, d2, b]
-  - list: [e, f, u2, u1, o, r3, r2, d]
-  - list: [g, h, l2, l1, o, u3, u2, f]
+  # Define a reflex simple polygon
+  - list:
+      [a,  b,  c,  d,
+       e, f, g,  h,  i,
+       j, k,  l,  m,  n,
+       o,  p,  q,  r]
+    properties:
+      randomDensity: 100
+      showMe: 1
 
-
-  # Define an offset Maltese cross
-  # because we are applying an offset use the anchors
-  - polygon: [*o, *u1, *u2, *u3]
-    origin: [4, 0]
-  - polygon: [*o, *l1, *l2, *l3]
-    origin: [4, 0]
-  - polygon: [*o, *d1, *d2, *d3]
-    origin: [4, 0]
-  - polygon: [*o, *r1, *r2, *r3]
-    origin: [4, 0]
+points: {
+a : [10, 7],  b : [12, 3],  c : [20, 8],  d : [13, 17],
+e : [10, 12], f : [12, 14], g : [14, 9],  h : [8, 10],  i : [6, 14],
+j : [10, 15], k : [7, 17],  l : [0, 16],  m : [1, 13],  n : [3, 15],
+o : [5, 8],  p : [-2, 9],  q : [5, 5],  r : [0, 0] }

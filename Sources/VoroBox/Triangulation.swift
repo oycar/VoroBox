@@ -76,8 +76,7 @@ let circleThreshold:Double = (10.0 + 96.0 * Epsilon) * Epsilon
 internal let orientThreshold:Double = circleThreshold
 
 
-internal let HomeFolder = ProcessInfo.processInfo.environment["HOME"] ?? "/Users/nemo"
-internal let ProjectFolder = HomeFolder + "/CloudStation/Projects/VoroBox"
+internal let ProjectFolder = FileManager.default.currentDirectoryPath
 internal let ZoneFolder = ProjectFolder + "/Zones"
 internal let OutputFolder = ProjectFolder + "/Output"
 internal var showCount = 0
@@ -973,7 +972,7 @@ extension Triangulation {
         }
         
         // Debugging
-        if showMe != 0 {
+        if showMe > 1 {
           print("\thub => \(h)")
           print("\tindex => \(hubPoints.count - 1)")
           print("\tcentre => \(hubPoints.last!)")
@@ -1152,7 +1151,7 @@ extension Triangulation {
         // First is the hub; last is always either the hub or rº
         Triangulation.loopVertices[iº] = [h, sº, pº, qº, rº]
         
-        if showMe != 0 {
+        if showMe > 1 {
           print("\thub => \(h)")
           print("\t\tindex => \(iº), \(hubIndex-1)")
           print("\t\tlist => \(Triangulation.loopVertices[iº]!)")
@@ -1232,7 +1231,7 @@ extension Triangulation {
           loopStop = sº
         }
         
-        if showMe != 0 {
+        if showMe > 1 {
           let h = list[hIndex]
           print("\tindex => \(iº)")
           print("\t\tlist => \(list)\n")
@@ -2379,7 +2378,6 @@ extension Triangulation {
       try! join(loop: convexHullNext, rejoin: true)
       
       if showMe > 2 {
-        print("Joined convex zone \(z)")
         showVoronoi(label: "jz_", type: "Voronoi")
       }
     } // End of each convex zone
