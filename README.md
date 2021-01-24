@@ -1,4 +1,4 @@
-![Australia](./img/Australia.patching)
+![Australia](./img/Australia.png)
 
 # VoroBox
 

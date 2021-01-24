@@ -27,14 +27,16 @@ struct Properties: Codable {
   var randomDensity:Double?
   var id:Int?
   var distinct:Bool?
+  var showMe:Int?
 }
 
 
 extension Properties {
-  init(with density:Double? = nil, _ i:Int? = nil, _ flag:Bool? = true) {
+  init(with density:Double? = nil, _ i:Int? = nil, _ flag:Bool? = true, _ show:Int? = nil) {
     randomDensity = density
     id = i
     distinct = flag
+    showMe = show
   }
 }
 
@@ -91,26 +93,23 @@ extension Zone {
     // Name this zone
     name = stored.name
     
-    // when showMesh is set lots of step by step snapshots of the mesh are drawn
-    if let showMesh = stored.properties?.showMe {
-      showMe = showMesh
-    }
-    
     // Global properties can give defaults
     var distinct = Zone.hullConforming ?? true
     if let g = Zone.globalProperties {
-      properties = Properties(with: g.randomDensity, g.id)
+      properties = Properties(with: g.randomDensity, g.id, g.distinct, g.showMe)
       if nil != g.distinct { distinct = g.distinct! }
-      
+      if nil != g.showMe { showMe = g.showMe! }
       
       if let p = stored.properties {
-        properties = Properties(with: p.randomDensity ?? g.randomDensity, p.id ?? g.id)
+        properties = Properties(with: p.randomDensity ?? g.randomDensity, p.id ?? g.id, p.distinct ?? g.distinct, p.showMe ?? g.showMe)
         if nil != p.distinct { distinct = p.distinct! }
+        if nil != p.showMe { showMe = p.showMe! }
       }
     } else if let p = stored.properties {
       // No default
       properties = Properties(with: p.randomDensity, p.id)
       if nil != p.distinct { distinct = p.distinct! }
+      if nil != p.showMe { showMe = p.showMe! }
     }
     
     // Set the zone code
@@ -541,6 +540,7 @@ extension Zone {
     let a = 2 * zoneIndices[(i + polygonCount) % polygonCount]
     let b = 2 * zoneIndices[(j + polygonCount) % polygonCount]
     let c = 2 * zoneIndices[(k + polygonCount) % polygonCount]
+    
     return orientIfSure(Triangulation.coords[a], Triangulation.coords[a + 1],
                         Triangulation.coords[b], Triangulation.coords[b + 1],
                         Triangulation.coords[c], Triangulation.coords[c + 1])
@@ -551,7 +551,8 @@ extension Zone {
     // Two points a and b lie on a diagonal if the
     // line joining them lies within the polygon and the
     // points are mutually visible
-    return inCone(a, b) && inCone(b, a) && isVisible(a, b)
+    // return inCone(a, b) && inCone(b, a) && isVisible(a, b)
+    return inCone(a, b) && isVisible(a, b)
   }
   
   //  inCone:  Is the diagonal line between points a & b within the cone
@@ -562,7 +563,7 @@ extension Zone {
     let a1 = a + 1
     
     // Test the orientation of the three triangles [a, a + 1, b], [a, b, a - 1] and [a, a - 1, a + 1]
-    // Test triangle [a, a1, b]
+    // Count how many are false
     var score = orientation(a, a1, b) > 0 ? 0 : 1
     
     // Test triangle [a, b, a0]
@@ -640,58 +641,44 @@ extension Zone {
     // and the third point lies 'between' the other two points
     // This never gets called?
     if !intersect { // If intersection is known nothing to do
-      // Just compute the intersection
-      intersect = (abcOrient == 0 && isBetween(first: a, second: b, middle: c)) ||
-        (abdOrient == 0 && isBetween(first: a, second: b, middle: d)) ||
-        (cdaOrient == 0 && isBetween(first: c, second: d, middle: a)) ||
-        (cdbOrient == 0 && isBetween(first: c, second: d, middle: b))
+      // More efficient to precompute modified labels
+      let p = zoneIndices[(a + polygonCount) % polygonCount]
+      let q = zoneIndices[(b + polygonCount) % polygonCount]
+      let r = zoneIndices[(c + polygonCount) % polygonCount]
+      let s = zoneIndices[(d + polygonCount) % polygonCount]
+      
+      // Just compute the intersectioq
+      intersect = (abcOrient == 0 && isBetween(first: p, second: q, middle: r)) ||
+        (abdOrient == 0 && isBetween(first: p, second: q, middle: s)) ||
+        (cdaOrient == 0 && isBetween(first: r, second: s, middle: p)) ||
+        (cdbOrient == 0 && isBetween(first: r, second: s, middle: q))
     }
     
     // Return the intersection status
     return intersect
   }
+
   
-  func isBetween(first i:Int, second j:Int, middle k:Int) -> Bool {
-    // Is the point c between the points a & b
-    let l = 2 * zoneIndices[(i + polygonCount) % polygonCount]
-    let m = 2 * zoneIndices[(j + polygonCount) % polygonCount]
-    let n = 2 * zoneIndices[(k + polygonCount) % polygonCount]
     
-    // Th epoints
-    let ax = Triangulation.coords[l]
-    let bx = Triangulation.coords[m]
-    
-    // Try abscissae first
-    if ax != bx {
-      let cx = Triangulation.coords[n]
-      return (ax - cx) * (bx - cx) <= 0
-    }
-    
-    // Use the ordinates
-    let ay = Triangulation.coords[l + 1]
-    let by = Triangulation.coords[m + 1]
-    let cy = Triangulation.coords[n + 1]
-    return (ay - cy) * (by - cy) <= 0
-  }
-  
-  // For screening input files
-  func checkPolygon() -> Bool {
-    // Get each edge index i
-    for i in 0..<zoneIndices.count-1 {
-      let jmax = i == 0 ? zoneIndices.count - 1 : zoneIndices.count
-      for j in i+2..<jmax {
-        let a = [i, (i + polygonCount) % polygonCount]
-        let b = [j, (j + polygonCount) % polygonCount]
-        
-        // Do the two edges i & j intersect?
-        if edgeIntersectsEdge(firstEdge: a, secondEdge: b) {
-          // Yes
-          return false
-        }
-      }
-    }
-    return true
-  }
+//
+//  // For screening input files
+//  func checkPolygon() -> Bool {
+//    // Get each edge index i
+//    for i in 0..<zoneIndices.count-1 {
+//      let jmax = i == 0 ? zoneIndices.count - 1 : zoneIndices.count
+//      for j in i+2..<jmax {
+//        let a = [i, (i + polygonCount) % polygonCount]
+//        let b = [j, (j + polygonCount) % polygonCount]
+//
+//        // Do the two edges i & j intersect?
+//        if edgeIntersectsEdge(firstEdge: a, secondEdge: b) {
+//          // Yes
+//          return false
+//        }
+//      }
+//    }
+//    return true
+//  }
 } // End of zones
 
 // Process the input data
@@ -719,7 +706,7 @@ func triangulateZones(using storedData:StoredZones) throws {
   
   // Global properties
   if let p = storedData.properties {
-    Zone.globalProperties = Properties(with: p.randomDensity, p.id, p.distinct)
+    Zone.globalProperties = Properties(with: p.randomDensity, p.id, p.distinct, p.showMe)
   } else {
     Zone.globalProperties = Properties(with: nil, 0, true)
   }
@@ -774,7 +761,7 @@ func triangulateZones(using storedData:StoredZones) throws {
     if (x > maxX)  {maxX = x}
     if (y > maxY)  {maxY = y}
   }
-    
+  
   // Now the explicitly specified points
   var specifiedPoints = Array<Int>()
   if let storedPoints = storedData.coordinates {
@@ -818,11 +805,15 @@ func triangulateZones(using storedData:StoredZones) throws {
   // Make space for all the points
   Triangulation.pointCount = Triangulation.coords.count / 2
   Triangulation.triangulation = Triangulation(size: Triangulation.pointCount)
-  
+
   // For reproducible runs output the initial zone file
-  if showMe > 1 {
+  if showMe < 0 {
     // A reproducible zone file for debugging
     Triangulation.triangulation.showZone(zones: convexZoneList)
+  }
+  
+  if showMe != 0 {
+    print("Phase 0 - Triangulate initial \(convexZoneList.count) zones")
   }
   
   // Now triangulate
@@ -833,6 +824,11 @@ func triangulateZones(using storedData:StoredZones) throws {
 
       // Join convexZones together
       try Triangulation.triangulation.join(loop: convexHullNext)
+      
+      if showMe != 0 {
+        print("Joined convex zone \(z)")
+        Triangulation.triangulation.showVoronoi(label: "iz_", type: "Voronoi")
+      }
     } catch {
       fatalError("Couldn't triangulate \(z)\n\(error)")
     }
@@ -843,7 +839,7 @@ func triangulateZones(using storedData:StoredZones) throws {
   
   // Add circumvertices
   if Zone.hullConforming ?? true {
-    Triangulation.triangulation.voronoiConforming()
+    try! Triangulation.triangulation.voronoiConforming()
   }
 }
 

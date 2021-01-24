@@ -22,8 +22,9 @@
 
 import Foundation
 import Files
+import Yams
 
-let ZoneFile   = "zoneData.json"
+let ZoneFile   = "zoneData.yml"
 
 // Read input data using JSON
 do {
@@ -57,6 +58,9 @@ do {
   
   // And a vtk file showing the edges
   filename = "edges_" + Zone.name
+  if iteration > 1 {
+    filename += "\(iteration)"
+  }
   file = try! folder.createFile(named: filename + ".vtk")
   try file.write(Triangulation.triangulation.vtkEdges(label: Zone.name, type: "Voronoi"))
   if !conforming {
@@ -67,7 +71,8 @@ do {
   fatalError("Couldn't write \(filename)\n\(error)")
 }
 
-// Hard coded
+
+//let triangulationData: [Triangulation] = zoneData.map({$0.triangulation ?? Triangulation()})
 func load<T: Decodable>(_ filename: String) -> T {
   do {
     // Locate the zone file
@@ -78,6 +83,10 @@ func load<T: Decodable>(_ filename: String) -> T {
 
     // Unpack the json  and
     // return the decoded data
+    
+    if ZoneFile == "zoneData.yml" {
+      return try YAMLDecoder().decode(T.self, from: data)
+    }
     return try JSONDecoder().decode(T.self, from: data)
   } catch {
     fatalError("Couldn't parse \(filename) as \(T.self):\n\(error)")

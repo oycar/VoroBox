@@ -67,6 +67,7 @@
 import Foundation
 import Files
 
+
 // Define statics
 internal let Epsilon:Double = pow(2.0, -53)
 // Shewchuk error bounds
@@ -75,9 +76,10 @@ let circleThreshold:Double = (10.0 + 96.0 * Epsilon) * Epsilon
 internal let orientThreshold:Double = circleThreshold
 
 
-internal let Project_Folder = FileManager.default.currentDirectoryPath
-internal let ZoneFolder = Project_Folder + "/Zones"
-internal let OutputFolder = Project_Folder + "/Output"
+internal let HomeFolder = ProcessInfo.processInfo.environment["HOME"] ?? "/Users/nemo"
+internal let ProjectFolder = HomeFolder + "/CloudStation/Projects/TriSwift"
+internal let ZoneFolder = ProjectFolder + "/Zones"
+internal let OutputFolder = ProjectFolder + "/Output"
 internal var showCount = 0
 
 // The edge boundary flag we can use a few small negative integers
@@ -89,6 +91,7 @@ internal let NoZoneCode = 0 // Not a zone code
 internal let BoundaryEdge = -1 // On the expanding hull
 internal let EmptyEdge = -2 // Useful for removed edges
 internal let UnusedEdge = -3
+internal let NoEdge = -4
 internal let FinishedEdge = -5
 internal let BoundaryFlag = -2 * FirstZone // Any boundary code larger than this is special purpose
 internal let EmptyVertex = -888
@@ -126,10 +129,7 @@ struct Triangulation: Codable {
   
   // The edge stack
   static var edgeStack = Array<Int>()
-  
-  // The vertex stack
-  static var vertexStack = Dictionary<Int, Int>()
-  
+    
   // Hull properties (too many?)
   // The triangulation boundary
   static var hullNext = Dictionary<Int, Int>()
@@ -594,7 +594,7 @@ extension Triangulation {
     
     // Not empty
     if convexNext.isEmpty { return }
-    if showMe == -1 {
+    if showMe > 1  {
       print("Join Hulls")
       showVoronoi(label: "jl_", type: "Delaunay")
     }
@@ -657,11 +657,9 @@ extension Triangulation {
     // the zones are flipped the loop edges can change
     p = hullStart
     var e = convexHullEdges[p]!
-    //var e = convexHullEdges.removeValue(forKey: p)!
     var q:Int, f:Int
     repeat {
       q = convexNext[p]!
-      //f = convexHullEdges[q]!
       f = convexHullEdges.removeValue(forKey: q)!
 
       // Connect loops
@@ -772,13 +770,35 @@ extension Triangulation {
     var index = 0
     var hookIndex = 0
     while !hullEdges.isEmpty {
-      let loopStart = hullEdges.first!.value
+      // When reproducible is set get the vertex with the minimum value of x
+      var loopStart:Int
+      if showMe != 0 {
+        let x = hullEdges.sorted {
+          let a = vertices[$0.key]
+          let b = vertices[$1.key]
+          let ax = Triangulation.coords[2 * a]
+          let bx = Triangulation.coords[2 * b]
+          if ax == bx {
+            let ay = Triangulation.coords[2 * a + 1]
+            let by = Triangulation.coords[2 * b + 1]
+            return ay <= by
+          }
+        
+          // Get the relative orientation
+          return ax < bx
+        }
+        let y = x.first!.key
+        
+        loopStart = y
+      } else {
+        loopStart = hullEdges.first!.value
+      }
       
       // First edge
       var e:Int? = loopStart
       repeat {
         // Save this vertex
-        Triangulation.loopVertices[index] = [vertices[e!]]
+        //Triangulation.loopVertices[index] = [vertices[e!]]
         index += 1
         
         // Next edge
@@ -794,92 +814,23 @@ extension Triangulation {
     return Triangulation.loopHooks.count
   }
   
-  
   // Conforming Voronoi
   // First the hubs need to defined
-  mutating func voronoiConforming()  {
-    // Modularize the process
-    func flipSpokes(start firstEdge:Int, exclude vertexList:Array<Int>) {
-      // The "spokes" are those edges apart from
-      // the ones connected to pº and qº, rº and sº
-      // We start at fº
-      
-      var spokes = Array<Int>()
-      var flipType = Dictionary<Int,Bool>()
-      var forceFlip = true
-      let qº = vertexList[qIndex]
-      
-      // The number of conditional flips could be reduced by
-      // testing to see if the angle hqp < -90º - but at extra
-      // cost to the other 87.5% of cases - so choose simpler option
-      var s = firstEdge, s2:Int
-      repeat {
-        // Go anticlockwise around the hub h
-        let  s0 = 3 * (s / 3)
-        s2 = s0 + (s + 2) % 3
-        
-        // Add this spoke if it is not excluded
-        // Excluded spokes are any between pº and qº inclusive
-        // For a convex hub this is just pº
-        // We can reduce the number of force flips - but at some expense
-        let v = vertices[s2]
-        if !vertexList.contains(v) {
-          spokes.append(s2)
-          flipType[s2] = forceFlip
-        } else if qº == v {
-          forceFlip = false
-        } else {
-          //  should always be true
-          forceFlip = true
-        }
-        
-        // Next edge
-        s = halfEdges[s2]
-      } while s > BoundaryEdge && s != firstEdge
-      
-      // The spokes hold edges which point in towards the hub vertex
-      // Sort by increasing length - always at least 2 spokes
-      // But only need to sort when more than two
-      if spokes.count > 2 {
-        // We have to sort them - get h postion
-        let h = vertices[firstEdge]
-        let hx = Triangulation.coords[2 * h], hy = Triangulation.coords[2 * h + 1]
-        
-        spokes.sort {
-          let a = vertices[$0]
-          let b = vertices[$1]
-          let ax = Triangulation.coords[2 * a] - hx
-          let ay = Triangulation.coords[2 * a + 1] - hy
-          let bx = Triangulation.coords[2 * b] - hx
-          let by = Triangulation.coords[2 * b + 1] - hy
-          return (ax * ax + ay * ay) < (bx * bx + by * by)
-        }
-      }
-      
-      // Record the new first edge as s
-      spokeLoop: repeat {
-        // flip this spoke
-        s = spokes.removeLast()
-        
-        // Left flip doesn't disturb fº+2
-        // But does disturb firstEdge - so capture
-        // the first edge connected to h
-        let _ = flipLeft(edge: s, unconditional: flipType[s]!)
-        
-      } while spokes.count > 0
-    }
+  mutating func voronoiConforming() throws {
     
     // First pass finds the generating points to are used to obtain the constructors
-    var hubPoints   = Array<Array<Double>>()
-    var hubRadii    = Dictionary<Int, Double>()
-    if showMe > 0 {
-      print("Stage 1")
+    var hubPoints = Array<Array<Double>>()
+    var hubRadii  = Dictionary<Int, Double>()
+    var isLinear  = Set<Int>()
+    if showMe != 0 {
+      print("Pass 1")
       print("\tFind hub generators")
+      showVoronoi(label: "fh_")
     }
     
     // Get each hull loop
     for iº in Triangulation.loopHooks.keys.sorted() {
-      // Get a boundaryedge from this loop
+      // Get a boundary edge from this loop
       let loopStart = Triangulation.loopHooks[iº]!
       
       // Find the first vertex
@@ -926,29 +877,37 @@ extension Triangulation {
         // The sense of the triangle [ghj]
         // If sense is positive a convex corner
         // If sense is zero not a corner - colinear
-        let sense = orientIfSure(gx, gy, hx, hy, jx, jy)
+        var sense = orientIfSure(gx, gy, hx, hy, jx, jy)
         
-        // If colinear hub radius is zero
-        if 0 == sense {
-          // The hub radius is associated with the vertex
-          // A single vertex can be present multiple times in one loop
-          hubRadii[h] = 0
-          hubPoints.append([hx, hy]) // The origin
-          continue roundLoop
+        // Now we need incircle Centre or (for colinear points) this is just the hub
+        // All colinear points will have at least one true triangle
+        // which is adjacent to it so a reliable result for the
+        // location of the generator point can be derived
+        var centre:Array<Double>? = nil
+        if 0 != sense {
+          centre = inCentre(gx, gy, hx, hy, jx, jy)
+          
+          // Provide a limiting value for the hub size
+          let dx = centre![0] - hx
+          let dy = centre![1] - hy
+          let r2 = dx * dx + dy * dy
+ 
+          // Check this
+          if r2 < squaredThreshold {
+            // Treat as colinear
+            // First though treat the centre as if it were convex
+            if sense < 0 {
+              centre = [hx - dx, hy - dy]
+            }
+            sense = 0
+          }
         }
         
-        // Now we need the incircle at [ghj]
-        let centre = inCentre(gx, gy, hx, hy, jx, jy)
+        // The hubSize
+        var hubSize = hubRadii[h, default:Double.infinity]
         
-        // Compute the hub size
-        let dx = centre[0] - hx
-        let dy = centre[1] - hy
-        var hubSize = dx * dx + dy * dy
-        
-        // See if it is the minimum at this hub
-        if let r2 = hubRadii[h] {
-          if r2 < hubSize { hubSize = r2 }
-        }
+        // Is this colinear?
+        if 0 == sense { isLinear.insert(hubPoints.count) }
         
         // Now loop over the spokes connected to the hub h
         // This is an anticlockwise loop
@@ -964,16 +923,16 @@ extension Triangulation {
           // Update internal vertices (we can be more efficient than this if it works)
           let i1 = vertices[a1]
           let i2 = vertices[a2]
-          
-          // if i1 is j & i2 is g this is done (only one triangle ie [hjg]
-          if j == i1 && g == i2 { break }
-          
+                    
           // Coordinates
           let i1x = Triangulation.coords[2 * i1]
           let i1y = Triangulation.coords[2 * i1 + 1]
           let i2x = Triangulation.coords[2 * i2]
           let i2y = Triangulation.coords[2 * i2 + 1]
-          let c = inCentre(hx, hy, i1x, i1y, i2x, i2y)
+          
+          // if i1 is j & i2 is g this is done (only one triangle ie [hjg]
+          // Only one triangle never occurs for a colinear point
+          let c = j == i1 && g == i2 ? centre! : inCentre(hx, hy, i1x, i1y, i2x, i2y)
           
           // Get r2
           let dx = c[0] - hx
@@ -993,25 +952,57 @@ extension Triangulation {
         } while BoundaryEdge < a
         
         // Save the hubSize and the incentre at this index
-        hubPoints.append(centre)
-        hubRadii[h] = hubSize
+        if sense != 0 {
+          hubPoints.append(centre!)
+        } else {
+          // We need to obtain a point perpendicular
+          // to the line connecting g & j at the hub h of length squareRoot(hubSize)
+          let r = perpendicular(scale: hubSize, hx, hy, gx, gy, jx, jy)
+          hubPoints.append(r)
+        }
+        
+        // The hub radii is accumulated for every hub h -
+        // so check this hub was not recorded before on another loop
+        if let r2 = hubRadii[h] {
+          if hubSize < r2 {
+            // Replace the entry
+            hubRadii[h] = hubSize
+          }
+        } else { // New entry
+          hubRadii[h] = hubSize
+        }
+        
+        // Debugging
+        if showMe != 0 {
+          print("\thub => \(h)")
+          print("\tindex => \(hubPoints.count - 1)")
+          print("\tcentre => \(hubPoints.last!)")
+          print("\tradius => \(hubRadii[h]!.squareRoot())")
+        }
+        
       } while loopStart != fº
     } // End of each loop
-    
+ 
+    // Second pass computes the constructor vertices
     // Get the vertices used to construct the conforming Voronoi diagram
     var hubIndex = 0
-    if showMe > 0 {
-      print("Stage 2")
+    if showMe != 0 {
+      print("Pass 2")
       print("\tCompute hub sentinels")
     }
     
-    // Second pass computes the constructor vertices
+    // Copy the loop hooks
+    // but later ones might be scrambles by removeVertex
+    var loopHooks = Triangulation.loopHooks
+
+    // Delete the old copy - because new keys might clobber old ones
+    Triangulation.loopHooks.removeAll(keepingCapacity: true)
+    
     // Get each hull loop
-    for jº in Triangulation.loopHooks.keys.sorted() {
+    for jº in loopHooks.keys.sorted() {
       // Clean loop hooks
       var iº = jº
-      let loopStart = Triangulation.loopHooks[jº]!
-      
+      let loopStart = loopHooks[jº]!
       
       var eº = Triangulation.hullPrev[loopStart]!
       var fº = loopStart
@@ -1027,7 +1018,8 @@ extension Triangulation {
       roundLoop: repeat {
         //
         // The next step is to generate the required new points
-        // There are three per hub
+        // There are four possible sentinel points
+        // But one is always redundant, and for colinear hubs two are redundant
         //
         var pº = EmptyVertex, qº = EmptyVertex, rº = EmptyVertex, sº = EmptyVertex
         
@@ -1048,9 +1040,9 @@ extension Triangulation {
         jy = Triangulation.coords[2 * j + 1]
         
         // Now we need the incircle at [ghj]
+        // In some cases this is not actually an incircle centre
         let centre = hubPoints[hubIndex]
-        hubIndex += 1
-
+        
         // Compute the hub centre
         var dx = centre[0] - hx
         var dy = centre[1] - hy
@@ -1058,61 +1050,66 @@ extension Triangulation {
         
         // The hub radius squared
         let h2 = hubRadii[h]!
-        if (h2 > squaredThreshold) {
-          let rd = 0.5 * (h2 / r2).squareRoot()
-          
-          // Now finally we can compute the location
-          dx = hx + rd * dx
-          dy = hy + rd * dy
-          
-          // The generator point is noted
-          Triangulation.coords.append(dx)
-          Triangulation.coords.append(dy)
-          
-          // Generator points have the local code
-          Triangulation.code.append(zCode)
-          
-          // Increment the point count
-          let d = Triangulation.pointCount
-          Triangulation.pointCount += 1
-                    
-          // Is this a reflex or convex corner?
+        
+        // Scale the distance from hx to the centre by the
+        // size of the hub radius
+        let rd = 0.5 * (h2 / r2).squareRoot()
+        
+        // Now finally we can compute the location
+        dx = hx + rd * dx
+        dy = hy + rd * dy
+        
+        // The generator point is noted
+        Triangulation.coords.append(dx)
+        Triangulation.coords.append(dy)
+        
+        // Generator points have the local code
+        Triangulation.code.append(zCode)
+        
+        // Increment the point count
+        let d = Triangulation.pointCount
+        Triangulation.pointCount += 1
+        
+        // We have a generator point d on the bisector; internal for a convex hub; external for a reflex hub
+        //
+        //
+        //                Convex Hub                      Reflex Hub
+        //
+        //                      g                            g
+        //                   . /                             .\
+        //            sº    . /                               .\   pº
+        //                 . /                                 .\
+        //       ---------- h ---pº-----            ------rº---- h --------
+        //                 . \                                 ./
+        //            rº    . \                               ./   qº
+        //                   . \                             ./
+        //                      j                            j
+        //
+        //      External Vertices rº & sº          Internal Vertices pº & qº
+        //
+        //
+        //  (For a colinear point pº == qº AND rº == sº
+        
+        
+        
+        if !isLinear.contains(hubIndex) {
+          // This is an internal vertex for a convex corner
+          // But an external vertex for a reflex corner
           let sense = orientIfSure(gx, gy, hx, hy, jx, jy)
-          
-          // We have a generator point d on the bisector; internal for a convex hub; external for a reflex hub
-          //
-          //
-          //                Convex Hub                      Reflex Hub
-          //
-          //                      g                            g
-          //                   . /                             .\
-          //            sº    . /                               .\   pº
-          //                 . /                                 .\
-          //       ---------- h ---pº-----            ------rº---- h --------
-          //                 . \                                 ./
-          //            rº    . \                               ./   qº
-          //                   . \                             ./
-          //                      j                            j
-          //
-          //      External Vertices rº & sº          Internal Vertices pº & qº
-          //
-          //
           
           // The reflected points
           let d_out = reflect(dx, dy, hx, hy, jx, jy)
           let d_in  = reflect(dx, dy, gx, gy, hx, hy)
-
+          
           // The properties of h are copied - twice
           Triangulation.code.append(zCode)
           Triangulation.code.append(zCode)
-
-          // This is an internal vertex for a convex corner
-          // But an external vertex for a reflex corner
+          
           if sense > 0 {
             // Internal generator on convex corner
             pº = d
             qº = pº
-
+            
             // Convex corner
             // Two External points
             // Inward reflexion
@@ -1133,399 +1130,385 @@ extension Triangulation {
             // Outward reflexion
             qº = d_out
           }
-          
-          // Save the vertices
-          // First is the hub; last is always either the hub or rº
-          Triangulation.loopVertices[iº] = [h, sº, pº, qº, rº]
         } else {
-          Triangulation.loopVertices[iº] = [h]
+          // Colinear point
+          
+          // The properties of h are copied - once
+          Triangulation.code.append(zCode)
+          
+          // Internal generator same as on a convex corner
+          pº = d
+          qº = pº
+          
+          // External generator same as on a reflex corner
+          sº = reflect(dx, dy, gx, gy, jx, jy)
+          rº = sº
+        }
+        
+        // Next hub index
+        hubIndex += 1
+        
+        // Save the vertices
+        // First is the hub; last is always either the hub or rº
+        Triangulation.loopVertices[iº] = [h, sº, pº, qº, rº]
+        
+        if showMe != 0 {
+          print("\thub => \(h)")
+          print("\t\tindex => \(iº), \(hubIndex-1)")
+          print("\t\tlist => \(Triangulation.loopVertices[iº]!)")
+        }
+        
+        
+        // Save first encounter as the loop hook - need to maintain the
+        // ordering of the loops; currently this is g->h
+        if jº == iº {
+          // The first key will refer to s
+          Triangulation.loopHooks[sº] = j
         }
         
         // Next index
         iº += 1
       } while loopStart != fº
-    }
+    } // End of Second Pass
     
     // Third pass folds out loops; removing the hub vertices
-    if showMe > 0 {
-      print("Stage 3")
+    if showMe != 0 {
+      print("Pass 3")
       print("\tFold Out Hub Corners")
+      showVoronoi(label: "fo_", type: "Delaunay")
     }
-    
-    // An array to record edges connected to hubs to be removed
-    var hubEdges = Array<Int>()
-    
+        
     // This adds the hub vertices and adjusts the triangulation
     // vertices are not changed but edges and hooks to edges are
     // Grow the triangulation
     growTriangulation(to: Triangulation.pointCount)
-    
-    // Copy the loop hooks
-    let loopHooks = Triangulation.loopHooks
-    
-    // Delete the old copy - because new keys might clobber old ones
-    Triangulation.loopHooks.removeAll(keepingCapacity: true)
-    
-    // We need to reindex the loops too
+
+    // We need to reindex the loops vertices
     let loopVertices = Triangulation.loopVertices
     Triangulation.loopVertices.removeAll(keepingCapacity: true)
+ 
+    // Get each hull loop
+    // Need to update the loopHooks again!
+    loopHooks = Triangulation.loopHooks
+    Triangulation.loopHooks.removeAll(keepingCapacity: true)
     
-    for jº in loopHooks.keys.sorted() {
-      var iº = jº
-      let loopStart = loopHooks[jº]!
+    // Each loop hook must be obtained in the correct order...
+    for (key, j) in loopHooks {
+      // The key is unique to a given list of vertices
+      // find it
+      var iº = loopVertices.first(where: {key == $0.value[sIndex]})!.key
+      var list = loopVertices[iº]!
       
+      // Colinear hubs - all the generator points are collapsed to h
+      // Find the edge joining the vertices s & r
+      let loopStart = findLoopEdge(from: list[hIndex], to: j)
+      
+      // Set the initial edge to start at h
       // Edge f goes from h->j
       var f = loopStart
       var e = Triangulation.hullPrev[f]!
       
+      // So the stop vertex is g or 'loopStop'
+      var loopStop = EmptyVertex // Not initialized yet
+ 
+      showLoop(label: "Initial Loop \(iº)", f)
+
+      
       // Get the next index and hub
-      // Because the vertex [h] attached to each edge
-      // is not unique we still have to use the flat index iº
-      var loopStop = EmptyVertex
       var convexVertex = EmptyVertex
       foldOut: repeat {
         // Get the vertices waiting to be added
-        let list = loopVertices[iº]!
         iº += 1
         
-        // Co-linear vertices have only one stored value
-        if FullHub == list.count {
-          // Unpack the vertices
-          let pº = list[pIndex], qº = list[qIndex]
-          let rº = list[rIndex], sº = list[sIndex]
-          
-          // Reindex these vertices
-          Triangulation.loopVertices[rº] = list
-          
-          // Adjust the stop
-          if EmptyVertex == loopStop {
-            loopStop = sº
-          }
-              
-          // Convex hubs always look like this (labels refer to internal edges),
-          //    eº and fº point in the opposite direction to e & f
-          //
-          //                Convex Hub
-          //            eº+1
-          //         sº----- g
-          //          \     /
-          //      eº+2 \ eº/e
-          //            \ /
-          //             h ----- pº
-          //            / \
-          //      fº+1 / fº\f
-          //          /     \
-          //         rº ---- j
-          //            fº+2
-          //
-          // Reflex hubs like this
-          //
-          //            g
-          //           / \     pº
-          //      eº+1/ eº\e  /
-          //         /     \ /
-          //        rº ---- h
-          //         \     / \
-          //      fº+2\ fº/f  \
-          //           \ /     qº
-          //            j
-          //
-          
-          // Add the external vertices
-          // fº     is the edge j -> h
-          // fº + 1 is the edge h -> rº
-          let fº = addVertex(outside: f, vertex: rº)
-
-          // Add sº (which may just be rº)
-          // eº     is the edge h  -> g
-          // eº + 2 is the edge sº -> h
-          let eº = addVertex(outside: e, vertex: sº)
-
-          // The values of e & f can be updated here
-          e = eº + 1
-          f = fº + 2
-
-          // Need to link rº and sº if they're equal
-          if rº == sº {
-            // Link edges - reflex corner
-            link(fº + 1, eº + 2)
-            
-            // This changes the hull!
-            loopEdges(delete: eº + 2)
-            loopEdges(delete: fº + 1)
-          } else if EmptyVertex == convexVertex {
-            // This is the new hook for this loop
-            // All loops have some convex corners
-            convexVertex = rº
-            Triangulation.loopHooks[sº] = rº
-          }
-
-          // Add the internal vertices
-          // Add pº near the incoming edge
-          let _ = addVertex(near: e, vertex: pº)!
-
-          // Add qº near the outgoing edge
-          if qº != pº {
-            // This is a reflex vertex
-            // Add this near the outgoing spoke f
-            // By construction should never duplicate a point
-            let shell = addVertex(near: f, vertex: qº)!
-            
-            // We need to check this is a spoke
-            // The placement of the earlier
-            // vertex pº can interfere with this
-            var isSpoke = false
-            var conflictingEdge:Int? = nil
-            for x in shell.values {
-              if vertices[x] == pº { conflictingEdge = x }
-              else if vertices[x] == vertices[fº + 1] { isSpoke = true }
-            }
-            
-            // flip the conflicting edge if there is one
-            if !isSpoke {
-              // This just does a single flip
-              _ = flipLeft(edge: conflictingEdge!, unconditional: true)
-            }
-          }
-
-          // Add all the spokes that don't point to one of rº, sº, pº or qº from h
-          // Anticlockwide search
-          // For a convex hub will be a boundary edge
-          flipSpokes(start: fº + 1, exclude: list)
-
-          // Record an edge linked to the hub vertex we wish to remove
-          // eº was undisturbed
-          // Edges are not stable in the long term
-          if pº == qº {
-            // Convex
-            hubEdges.append(Triangulation.hullNext[eº + 2]!)
-          } else {
-            // Reflex
-            hubEdges.append(halfEdges[eº + 2])
-          }
-        } else {
-          // Co-linear
-          Triangulation.loopVertices[list.last!] = list
-          //hubEdges.append(halfEdges[f])
-
-          // New? - will not happen
-          if EmptyVertex == loopStop {
-            loopStop = vertices[f]
-          }
+        // Unpack the vertices
+        let pº = list[pIndex], qº = list[qIndex]
+        let rº = list[rIndex], sº = list[sIndex]
+        
+        // Reindex these vertices
+        Triangulation.loopVertices[rº] = list
+        
+        // Adjust the stop
+        if EmptyVertex == loopStop {
+          loopStop = sº
         }
+        
+        if showMe != 0 {
+          let h = list[hIndex]
+          print("\tindex => \(iº)")
+          print("\t\tlist => \(list)\n")
+
+          print("\t\th  => \(h): [\(Triangulation.coords[2 * h]), \(Triangulation.coords[2 * h + 1])]")
+          print("\t\tsº => \(sº): [\(Triangulation.coords[2 * sº]), \(Triangulation.coords[2 * sº + 1])]")
+          print("\t\tpº => \(pº): [\(Triangulation.coords[2 * pº]), \(Triangulation.coords[2 * pº + 1])]")
+          print("\t\tqº => \(qº): [\(Triangulation.coords[2 * qº]), \(Triangulation.coords[2 * qº + 1])]")
+          print("\t\trº => \(rº): [\(Triangulation.coords[2 * rº]), \(Triangulation.coords[2 * rº + 1])]")
+        }
+        
+        
+        // Convex hubs always look like this (labels refer to internal edges),
+        //    eº and fº point in the opposite direction to e & f
+        //
+        //                Convex Hub
+        //            eº+1
+        //         sº----- g
+        //          \     /
+        //      eº+2 \ eº/e
+        //            \ /
+        //             h ----- pº
+        //            / \
+        //      fº+1 / fº\f
+        //          /     \
+        //         rº ---- j
+        //            fº+2
+        //
+        // Reflex hubs like this
+        //
+        //            g
+        //           / \     pº
+        //      eº+1/ eº\e  /
+        //         /     \ /
+        //        rº ---- h
+        //         \     / \
+        //      fº+2\ fº/f  \
+        //           \ /     qº
+        //            j
+        //
+        
+        // Add the external vertices
+        // fº     is the edge j -> h
+        // fº + 1 is the edge h -> rº
+        let fº = addVertex(outside: f, vertex: rº)
+        
+        if showMe != 0 { showLoop(label: "Added Vertex => \(rº)", fº+2) }
+        showVoronoi(label: "fo_", type: "Delaunay")
+
+  
+        // Add sº (which may just be rº)
+        // eº     is the edge h  -> g
+        // eº + 2 is the edge sº -> h
+        let eº = addVertex(outside: e, vertex: sº)
+ 
+
+        
+        // The values of e & f can be updated here
+        e = eº + 1
+        f = fº + 2
+        
+        // Need to link rº and sº if they're equal
+        if rº == sº {
+          // Link edges - reflex corner or colinear
+          link(fº + 1, eº + 2)
+          
+          // This changes the hull!
+          loopEdges(delete: eº + 2)
+          loopEdges(delete: fº + 1)
+        } else if EmptyVertex == convexVertex {
+          // This is the new hook for this loop
+          // All loops have some convex corners
+          convexVertex = rº
+          Triangulation.loopHooks[sº] = rº
+        }
+    
+        if showMe != 0 {
+          showLoop(label: "Added Vertex => \(sº)", eº+1)
+        }
+        showVoronoi(label: "fo_", type: "Delaunay")
+
+        
+        // The triangulation is no longer locally Delaunay
+        var trackedEdges = Array<Int>([e, f])
+        
+        // Shorthand
+//        func updateBoundary() {
+//          e = trackedEdges[0]
+//          f = trackedEdges[1]
+//        }
+        
+        // Update the triangulation
+        if flipVertex(onEdge: f, trackBoundaries: &trackedEdges) {
+          e = trackedEdges[0]
+          f = trackedEdges[1]
+        }
+        
+        if showMe != 0 { showLoop(label: "Flipped Vertex => \(rº)", f) }
+        showVoronoi(label: "fo_", type: "Delaunay")
+
+        // Convex corner
+        if rº != sº {
+          if flipVertex(onEdge: e, trackBoundaries: &trackedEdges) {
+            e = trackedEdges[0]
+            f = trackedEdges[1]
+          }
+          
+          if showMe != 0 { showLoop(label: "Flipped Vertex => \(sº)", f) }
+          showVoronoi(label: "fo_", type: "Delaunay")
+
+        }
+        
+        // Add the internal vertices
+        // Add pº near the incoming edge
+        var shell = addVertex(near: e, vertex: pº)!
+        var a = shell.first!
+        var a0 = 3 * (a / 3)
+
+        // This can break f
+        // fix the boundary
+        func update(edge f:Int, on shell:Array<Int>) -> Int {
+          // Either added inside a triangle or on an edge
+          if 3 == shell.count {
+            // Added inside
+            // Was f disturbed?
+            for i in 1...2 {
+              if f == a0 + (a + i) % 3 {
+                trackedEdges[1] = shell[i]
+                return trackedEdges[1]
+              }
+            }
+          } else {
+            // Added on the edge
+            if f == a0 + (a + 2) % 3 { // a2
+              trackedEdges[1] = shell[1] // d2
+              return trackedEdges[1]
+            } else {
+              let b = halfEdges[a]
+              if b > BoundaryEdge {
+                let b0 = 3 * (b / 3)
+                if f == b0 + (b + 1) % 3 { // b1
+                  trackedEdges[1] = shell[2] // c1
+                  return trackedEdges[1]
+                }
+              } // End of not a boundary
+            } // End of not disturbed on shell[1
+          }
+          
+          return trackedEdges[1]
+        }
+        
+        // Update f
+        f = update(edge: trackedEdges[1], on: shell)
+        
+        // Now we can update the mesh
+        var a2 = a0 + (a + 2) % 3
+        if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) {
+          e = trackedEdges[0]
+          f = trackedEdges[1]
+        }
+        
+        if showMe != 0 { showLoop(label: "Flipped Vertex => \(pº)", f) }
+        showVoronoi(label: "fo_", type: "Delaunay")
+
+        // Add qº near the outgoing edge
+        if qº != pº {
+          // This is a reflex vertex
+          // Add this near the outgoing spoke f
+          // By construction should never duplicate a point
+          shell = addVertex(near: f, vertex: qº)!
+          a = shell.first!
+          a0 = 3 * (a / 3)
+          
+          // Update f
+          f = update(edge: trackedEdges[1], on: shell)
+          
+          // Now proceed
+          a2 = a0 + (a + 2) % 3
+          if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) {
+            e = trackedEdges[0]
+            f = trackedEdges[1]
+          }
+          showVoronoi(label: "fo_", type: "Delaunay")
+          
+          if showMe != 0 { showLoop(label: "Flipped Vertex => \(qº)", f) }
+        }
+        
+        // Anticlockwise search for an edge connected to the hub h
+        var s = f, s2 = -1
+        repeat {
+          // Go anticlockwise around the hub h
+          let  s0 = 3 * (s / 3)
+          s2 = s0 + (s + 2) % 3
+          if vertices[s2] == list[hIndex] {
+            break
+          }
+          
+          // Next edge
+          s = halfEdges[s2]
+        } while s > BoundaryEdge && s != f
+        
+        // Record an edge linked to the hub vertex we wish to remove
+        // Edges are not stable in the long term
+        let hubEdge = s2
                 
-        // Next hub
-        e = f
-        f = Triangulation.hullNext[e]!
+        // Debug
+        showVoronoi(label: "fo_", type: "Delaunay")
+        
+        // Experimental - remove vertex before edge can go stale
+        // Find first loop edge which will survive -
+        // Start at rº; which is recorded on f
+        a = Triangulation.hullNext[f]!
+        repeat {
+          let a0 = 3 * (a / 3)
+          let a2 = a0 + (a + 2) % 3
+          
+          // Have we found a loop edge which is not connected to the hub?
+          if list[hIndex] != vertices[a2] { break }
+          a = Triangulation.hullNext[a]!
+        } while a != f
+        if a == f { throw triangulationError.initError("Cannot find edge not connected to hub \(list[hIndex])") }
+        
+        // remove this vertex
+        try! removeVertex(from: hubEdge)
+        
+        if showMe != 0 { showLoop(label: "Removed Vertex => \(list[hIndex])", a) }
+
+        // Get next edge
+        e = a
+        repeat {
+          f = e
+          e = Triangulation.hullPrev[f]!
+          if e == a {
+            throw triangulationError.initError("Cannot find edge connected to rº \(rº)")
+          }
+        } while vertices[e] != rº
+        
+        // Next list
+        if vertices[f] != loopStop {
+          list = loopVertices[iº]!
+        }
       } while vertices[f] != loopStop
     } // Finished all loops
-    
-    // Fourth Pass
-    // For each hub remove the now no longer needed hub vertex
-    // (Actually still kept for co-linear hubs)
-    if showMe > 0 {
-      print("Stage 4")
-      print("\tRemove \(hubEdges.count) Vertices")
-      let ks = hubEdges.count / 10
-      var kc = ks
-      for (i, e) in hubEdges.enumerated() {
-        // Remove the hub vertex
-        if i > kc {
-          print("\t\(i) Vertices Removed")
-          kc += ks
-        }
-        removeVertex(from: e)
-      } // Finished this hub
-      print("\tAll Removed")
-    } else {
-      // No progress indicator
-      for e in hubEdges {
-        // Remove the hub vertex
-        removeVertex(from: e)
-      } // Finished this hub
-    }
 
-    // Fifth pass - remove the now redundant co-linear hubs
-    if showMe > 0 {
-      print("Stage 5")
-      print("\tRemove Co-Linear Vertices")
-    }
-    cleanHubs()
-    
-    // Sixth Pass
-    // Clean up corners after folding them out
-    if showMe > 0 {
-      print("Stage 6")
-      print("\tMake Modified Triangulation Delaunay")
-    }
-    flipHubs()
-    
-    // Seventh Pass (!!)
+    // Fourth Pass
     // Balance the remaining loop edges by adding image vertices
-    if showMe > 0 {
-      print("Stage 7")
+    if showMe != 0 {
+      print("Pass 4")
       print("\tAdd Image Vertices")
     }
     try! addImages()
   }
-  
-
-  // Colinear hubs are redundant
-  mutating func cleanHubs() {
-    // Get each hull loop
-    for (s, r) in Triangulation.loopHooks {
-      
-      // Colinear hubs - all the generator points are collapsed to h
-      // Find the edge joining the vertices s & r
-      let loopStart = findLoopEdge(from: s, to: r)
-      
-      // So the stop vertex is s
-      let loopStop = s
-      
-      // Set the initial edge to start at r
-      var eº = Triangulation.hullNext[loopStart]!
-      
-      // Get each loop hub in turn
-      roundLoop: repeat {
-        // From the incoming edge generate the outgoing one
-        //
-        var vertexList = Triangulation.loopVertices[vertices[eº]]
-        
-        // This happens for convex vertices - advance one edge
-        if nil == vertexList {
-          eº = Triangulation.hullNext[eº]!
-          vertexList = Triangulation.loopVertices[vertices[eº]]
-        }
-        
-        // Unpack the vertices
-        // Is this a co-linear vertex?
-        if FullHub != vertexList!.count {
-          let h = vertexList!.last!
-          
-          // Get Safe edges
-          var dº = Triangulation.hullPrev[eº]!
-          dº = Triangulation.hullPrev[dº]!
-
-          // Remove  the vertex
-          removeVertex(from: eº)
-          Triangulation.loopVertices[h] = nil
-          
-          // Repair edge
-          eº = dº
-        }
-        
-        // Get next hub
-        eº = Triangulation.hullNext[eº]!
-      } while loopStop != vertices[eº]
-    } // End of each loop
-  }
-  
-  
-  // Clean up spokes around hubs
-  mutating func flipHubs() {
+ 
+  func showLoop(label title:String, _ start:Int) {
+    print("# \(title)")
+    var vString = ""
     
-    // Get each hull loop
-    for (s, r) in Triangulation.loopHooks {
-
-      
-      // Convex hubs always look like this (labels refer to internal edges),
-      //    eº and fº point in the opposite direction to e & f
-      //
-      //          /   Convex Hub (pº == qº)
-      //         sº
-      //         |\     /
-      //         | \   /
-      //         |  \ /
-      //         |   pº------
-      //         |  / \
-      //         | /   \
-      //         |/     \
-      //         rº
-      //          \
-      //         eº\
-      //
-      // Reflex hubs like this (rº == sº)
-      //
-      //              /
-      //             /
-      //            pº------
-      //           /|\
-      //          / | \
-      //      \  /  |  \
-      //        rº  |
-      //   eº /  \  |  /
-      //     /    \ | /
-      //           \|/
-      //            qº------
-      //             \
-      //              \
-   
-            
-      // Find the edge joining the vertices s & r
-      let loopStart = findLoopEdge(from: s, to: r)
-      
-      // So the stop vertex is s
-      let loopStop = s
-      
-      // Set the initial edge to start at r
-      var eº = Triangulation.hullNext[loopStart]!
-      
-      // Get each loop hub in turn
-      roundLoop: repeat {
-        // From the incoming edge generate the outgoing one
-        //
-        var vertexList = Triangulation.loopVertices[vertices[eº]]
-        
-        // This happens for convex vertices - advance one edge
-        if nil == vertexList {
-          eº = Triangulation.hullNext[eº]!
-          vertexList = Triangulation.loopVertices[vertices[eº]]
-        }
-        
-        // The full set of vertices
-        let qº = vertexList![qIndex],
-            rº = vertexList![rIndex], sº = vertexList![sIndex]
-  
-        // Now load the vertex stack
-        // Reflex case have to search for qº
-        var a = eº, dº:Int = -1
-        if sº == rº {
-          repeat {
-            let a0 = 3 * (a / 3)
-            let a2 = a0 + (a + 2) % 3
-            a = halfEdges[a2]
-            
-            if vertices[a2] == qº {
-              // Found qº
-              dº = a
-              break
-            }
-          } while true
-        } else {
-          // Convex case is easy
-          dº = Triangulation.hullPrev[eº]!
-        }
-        
-        // Load the stack
-        let d0 = 3 * (dº / 3)
-          
-        // The three members of this triangle are loaded
-        for i in 0...2 {
-          Triangulation.vertexStack[vertices[d0 + i]] = d0 + i
-        }
-        
-        // Fix triangulation
-        eº = flipVertices(track: eº)
-        
-        // Get next edge
-        eº = Triangulation.hullNext[eº]!
-      } while loopStop != vertices[eº]
-    } // End of each loop
+    var x = start
+    print("points: {")
+    repeat {
+      let v = vertices[x]
+      vString += " v_\(v),"
+      print("# Vertex => \(v) Edge => \(x)")
+      print("v_\(v) : [\(Triangulation.coords[2 * v]), \(Triangulation.coords[2 * v + 1])], ")
+      x = Triangulation.hullNext[x]!
+    } while x != start
+    print("}")
+    print("zones:")
+    print("  - list: [\(vString)]")
   }
-
-  // Flip around inserted vertices
-  mutating func flipVertices(track edge:Int) -> Int {
-    // Flip vertices
+  
+  
+  // Flip around a vertex
+  mutating func flipVertex(onEdge e:Int, trackBoundaries boundaryList:inout Array<Int>) -> Bool {
+    // Flip vertex
+    var flipped = false
     // Maintains a stack of edges for flipping
     // Differs from flipEdges in that instead
     // of considering a triangle at a time it considers the
@@ -1540,38 +1523,29 @@ extension Triangulation {
     //                       /   \
     //                      /     \
     //                     *       *
-    // A tracked boundary edge
-    var eº = edge
-    
-    // The initial edge
-    var a:Int
-    
     // Establish the stopEdge
     var stopEdge = EmptyEdge
-    if showMe > 0 {
-      print("Flip Vertices")
+    
+    // Now get the vertex
+    var v = vertices[e]
+    
+    // The initial edge
+    var a = e
+    
+    // Debugging
+    if showMe > 1 {
+      print("Flip Vertex")
     }
     
-    // Now get first vertex
-    var v:Int
-    if let first = Triangulation.vertexStack.first {
-      // Establish the stopEdge
-      stopEdge = EmptyEdge
-      
-      // And the edge
-      v = first.key
-      a = Triangulation.vertexStack.removeValue(forKey: v)!
-    } else {
-      return eº
-    }
-    
+    // Now set the vertex stack
+    var vertexStack = Dictionary<Int, Int>()
+
     // eachVertex : repeat {
     eachVertex: while EmptyVertex != v {
       var a2:Int
       
-      if showMe > 0 {
+      if showMe > 1 {
         print("\tFlip vertex => \(v)")
-        print("\tStack Size => \(Triangulation.vertexStack.count)")
       }
       eachEdge: repeat {
         let a0 = 3 * (a/3)
@@ -1579,7 +1553,7 @@ extension Triangulation {
         a2 = a0 + (a + 2) % 3
         
         // Start by trying to flip edge a
-        if flipLeft(edge: a, unconditional: false) {
+        if let flipList = flipLeft(edge: a, unconditional: false) {
           /* flipped a
            *
            *            i                   i
@@ -1596,6 +1570,7 @@ extension Triangulation {
            *
            *
            */
+          flipped = true
           
           // Update the vertex stacks
           // Only one entry is needed for each vertex
@@ -1604,24 +1579,27 @@ extension Triangulation {
           let b0 = 3 * (b / 3)
           let b2 = b0 + (b + 2) % 3
           let w = vertices[b2]
-          if showMe > 0 { print("\t\tFlipped edge connecting \(v) => \(w)") }
+          if showMe > 1 { print("\t\tFlipped edge connecting \(v) => \(w)") }
           
           // We are processing (v) so can be ignored
           // If w is in the stack replace the edge
-          if nil != Triangulation.vertexStack[w] {
-            Triangulation.vertexStack[w] = b2
+          if nil != vertexStack[w] {
+            vertexStack[w] = b2
           }
           // Now add/replace entries for (i) and (p)
-          Triangulation.vertexStack[i] = b
-          Triangulation.vertexStack[p] = a1
+          vertexStack[i] = b
+          vertexStack[p] = a1
           
           // Keep the boundary edge eº valid
           // a2 and b1 are not disturbed,
           // a and b2 cannot be boundary edges
-          if a1 == eº {
-            eº = b2
-          } else if b == eº {
-            eº = a
+          if !flipList.isEmpty {
+            for (index, tracked) in boundaryList.enumerated() {
+              // Was this edge replaced
+              if let newEdge = flipList[tracked] {
+                boundaryList[index] = newEdge
+              }
+            }
           }
           
           // If stopEdge was changed update it
@@ -1630,7 +1608,7 @@ extension Triangulation {
           }
           // Repeat with edge a
           continue eachEdge
-        } else if flipLeft(edge: a1, unconditional: false) {
+        } else if let flipList = flipLeft(edge: a1, unconditional: false) {
           // If the spoke did not flip try the shell
           // This creates an extra spoke if it works
           /* flip an edge a
@@ -1648,28 +1626,31 @@ extension Triangulation {
            *            p                     p
            *
            */
-          
+          flipped = true
+
           // Update the vertex stacks
           // Only one entry is needed for each vertex
-          let b  = halfEdges[a2]
-          let b0 = 3 * (b / 3)
-          let b2 = b0 + (b + 2) % 3
+          //let b  = halfEdges[a2]
+          //let b0 = 3 * (b / 3)
+          //let b2 = b0 + (b + 2) % 3
           let w = vertices[a2]
-          if showMe > 0 { print("\t\tFlipped edge connecting \(v) => \(w)") }
-
+          if showMe > 1 { print("\t\tFlipped edge connecting \(v) => \(w)") }
+          
           // We are processing (v) so can be ignored
           // Now add/replace entry for (w)
-          Triangulation.vertexStack[w] = a2
+          vertexStack[w] = a2
           
           // Keep the boundary edge eº valid
           // a and  b1 are not disturbed,
           // a1 and b2 cannot be boundary edges
-          if a2 == eº {
-            eº = b2
-          } else if b == eº {
-            eº = a1
+          if !flipList.isEmpty {
+            for (index, tracked) in boundaryList.enumerated() {
+              // Was this edge replaced
+              if let newEdge = flipList[tracked] {
+                boundaryList[index] = newEdge
+              }
+            }
           }
-                    
         } else  if stopEdge == EmptyEdge {
           // Edge a is made the stopEdge
           stopEdge = a
@@ -1686,24 +1667,24 @@ extension Triangulation {
         // Stop at the stopEdge
       } while a > BoundaryEdge
       
-      if showMe > 0 { print("\tFinished vertex \(v)") }
-
+      if showMe > 1 { print("\tFinished vertex \(v)") }
+      
       // Now get another vertex
       // Query : Does order matter?
-      if let first = Triangulation.vertexStack.first {
+      if let first = vertexStack.first {
         // Establish the stopEdge
         stopEdge = EmptyEdge
         
         // And the edge
         v = first.key
-        a = Triangulation.vertexStack.removeValue(forKey: v)!
+        a = vertexStack.removeValue(forKey: v)!
       } else {
         v = EmptyVertex
       }
     }
     
     // Any processing?
-    return eº
+    return flipped
   }
   
   // This adds the new vertices along each active edge (from one rº => sº)
@@ -1989,7 +1970,7 @@ extension Triangulation {
                 // Left diagonal would be undisturbed
                 // Right diagonal is changed by single flip
                 if rightDiagonal != EmptyEdge {
-                  didFlip = flipLeft(edge: pq, unconditional: false)
+                  didFlip = (nil != flipLeft(edge: pq, unconditional: false))
 
                   a = rightDiagonal
                 } else {
@@ -2033,7 +2014,7 @@ extension Triangulation {
               } else {
                 // Left diagonal
                 // Convert C->A with left flip does not disturb boundary
-                didFlip = flipLeft(edge: a, unconditional:false)
+                didFlip = (nil != flipLeft(edge: a, unconditional:false))
               }
               
               // If flip failed then retreat (uncondiotonall
@@ -2092,8 +2073,8 @@ extension Triangulation {
             showVoronoi(label: "be_")
 
             // New boundary edge is fº
-            let fº = replacedEdges[eº]!
-            
+            let fº = replacedEdges[2] // Magic number, returns [eº + 1, fº + 2, fº, eº]
+
             // Update the edge
             eº = fº
             
@@ -2101,10 +2082,11 @@ extension Triangulation {
             // Because various flips were made to get it to
             // the sought configuration
             // v is found on replacedEdges[eº+2] = fº+2
-            Triangulation.vertexStack[v] = fº + 2
-            // Triangulation.vertexStack[vº] = fº + 1
-            eº = flipVertices(track: eº)
-
+            var trackedEdges = Array<Int>([eº])
+            if flipVertex(onEdge: fº + 2, trackBoundaries: &trackedEdges) {
+              eº = trackedEdges.first!
+            }
+            
             // A new vertex - q & r are undisturbed
             // But save the old p
             mirrorVertices[s] = p
@@ -2133,14 +2115,7 @@ extension Triangulation {
   }
   
   // Remove a vertex from the triangulation
-  mutating func removeVertex(from startEdge:Int) {
-    // The vertex being removed
-    let h = vertices[startEdge]
-    
-    if showMe > 0 {
-      print("Remove Vertex => \(h)")
-    }
-    
+  mutating func removeVertex(from startEdge:Int) throws {
     // Nested functions
     func unlink(_ a:Int) -> Int {
       // Unlinking always sets the default boundary code
@@ -2154,208 +2129,40 @@ extension Triangulation {
       // Return opposing half edge
       return ha
     }
-  
+    
     // Remove a triangle
-    func removeTriangle(_ a0:Int) -> Int {
-      var externalCode = EmptyEdge // The default boundary code
-        
-      // Unlink half edges
-      var numberBoundaries = 0
-      var lastBoundaryEdge = -1, lastInternalEdge = -1
-      var outerEdges = Array<Int>(repeating: 0, count: 3)
+    // New version
+    func removeTriangle(_ a:Int, _ a0:Int) {
+      if showMe > 0 {
+        print("Removing triangle \(a0))")
+      }
       for i in 0...2 {
-        let b = unlink(a0 + i)
-        outerEdges[i] = b
+        // The internal edge
+        let e = a0 + (a + i) % 3
         
-        // Record which boundaries were which
-        if b <= BoundaryEdge {
-          lastBoundaryEdge = i
-          numberBoundaries += 1
-          
-          // The boundary code - save a new
-          // code, conforming edges have
-          // an odd code which will be unique
-          // non-conforming may not be unique
-          // but are equivalent
-          if 1 == b % 2 {
-            // Unique voronoi conforming code
-            externalCode = b
-          } else if 0 == externalCode % 2 && b < externalCode {
-            // New delaunay conforming code
-            // Save the minimum code encountered
-            externalCode = b
+        // Unlink spokes
+        if 1 != i {
+          let b = unlink(e)
+          if showMe > 0 {
+            print("\tUnlink edge \(e) outer edge => \(b)]")
           }
         } else {
-          lastInternalEdge = i
-        }
-      } // End of outerEdges
-      
-      // outerEdges records the
-      // neighbouring half edge - unless its a boundary
-      if showMe > 0 {
-        print("\tRemove Triangle")
-        for i in 0...2 {
-          print("\t\tv => \(vertices[a0 + i]) e => \(a0+i)")
-        }
-      
-        print("\t\tBoundaries => \(numberBoundaries)")
-        print("\t\tLast Internal => \(lastInternalEdge)")
-        print("\t\tLast External => \(lastBoundaryEdge)")
-      }
-      
-      // Adjust the loop edges
-      if numberBoundaries == 1 {
-        let x = lastBoundaryEdge
-        
-        // One outer edge to remove (at x) - two to add
-        let x1 = (x + 1) % 3
-        let x2 = (x + 2) % 3
-
-        // So is q already in the triangulation hull?
-        let q = vertices[a0 + x2]
-        var loopList = Triangulation.hullNext.compactMap { q == vertices[$0.key] ? $0.key : nil }
-        
-        // Monovalent loop - simple
-        //
-        //       p
-        //      /.
-        //  O1 / .   Here removing spoke x connecting h to p
-        //    /  .   simply adds O2 and O1 to the loop
-        //   q x .
-        //    \  .
-        //     \ .
-        //   O2 \.
-        //       h
-        // Replace
-        loopEdges(edge: outerEdges[x1], replaces: a0 + x)
-        loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
-        
-        // When a triangle is cut away it can either change  the current loop
-        // by adding one more boundary edge to it OR
-        // it can split a loop into two loops
-        //
-        //   |   p
-        //   |  /.
-        //   | / .   Here removing spoke x connecting h to p makes
-        //   |/  .   vertex q == vertices[x2] more polyvalent
-        //   q x .   by splitting a loop into two
-        //   |\  .   After:
-        //   | \ .   A1 -> O1; O2 -> B1
-        // LL|  \.
-        //   |   h   This will be different for internal loops...
-        if !loopList.isEmpty {
-          var listIndex = 0
-          
-          // Is this already a polyvalent loop?
-          if loopList.count > 1 {
-            // This is more tricky
-            // Polyvalent loop - need to identify correct outgoing edge fom q
-            // Which is the one that makes
-            // the sharpest right turn relative to x1
-            loopList.append(outerEdges[x1])
-            
-            // Sort the edges by orientation
-            let q = vertices[a0 + x1]
-            let qx = Triangulation.coords[2 * q], qy = Triangulation.coords[2 * q + 1]
-            loopList.sort {
-              let a = vertices[$0]
-              let b = vertices[$1]
-              let ax = Triangulation.coords[2 * a]
-              let ay = Triangulation.coords[2 * a + 1]
-              let bx = Triangulation.coords[2 * b]
-              let by = Triangulation.coords[2 * b + 1]
-              
-              // Get the relative orientation
-              return orient(ax, ay, bx, by, qx, qy)
-            }
-            
-            // Where is the new edge
-            listIndex = loopList.firstIndex(of: outerEdges[x1])!
-            
-            // We need the one before this
-            listIndex = listIndex > 0 ? listIndex - 1: loopList.count - 1
-          } // Polyvalent loop
-          
-          // Splice this in
-          loopEdges(splice: outerEdges[x1], at: loopList[listIndex])
+          // Doesn't unlink the shell
+          shellEdges.append(e)
         }
 
-      } else if numberBoundaries == 2 {
-        let x = lastInternalEdge
-
-        // One outer edge to add (at x) - two to remove
-        let x1 = (x + 1) % 3
-        let x2 = (x + 2) % 3
-        
-        // Are both boundaries in the new loop?
-        // This requires both to be spokes
-        // And x1 is the stopEdge
-        // So x2 must be the other spoke
-        
-        if vertices[a0 + x2] != h {
-          //
-          // In this case the vertex q is already polyvalent
-          //
-          //   |   /
-          // A1|  / A2       Before:
-          //   | /           A1->A2; x1 -> O2; O2->B2
-          //   |/  O2 == B1
-          //   q.......p
-          //   |\     .      After
-          //   |O\   .       A1 -> A2; O->B2
-          // B2|  \ . x1
-          //   |   h
-  
-          //    replace O2 (== B1) with O; delete x1
-          //
-          loopEdges(edge: outerEdges[x], replaces: a0 + x2)
-          loopEdges(delete: a0 + x1)
-          
-        } else {
-          // Monovalent case
-          //
-          //       /
-          //      / A2        Before
-          //     /            O1->A2
-          //    /
-          //   q.......p
-          //    \     .       After
-          //   O \   .        O->A2
-          //      \ .
-          //       h          Replace O1 with O; delete O2
-          loopEdges(edge: outerEdges[x], replaces: a0 + x1)
-          loopEdges(delete: a0 + x2)
-        }
-      } else if 3 == numberBoundaries {
-        // Remove all the loop edges
-        // No splice needed
-        
-        loopEdges(delete: a0)
-        loopEdges(delete: a0 + 1)
-        loopEdges(delete: a0 + 2)
-      } else {
-        // Zero boundaries already present
-        // Can only occur on first call
-        // Initialize a loop with three new boundaries
-        //
-        for i in 0...2 {
-          let x = outerEdges[i]
-          let x1 = outerEdges[(i + 1) % 3]
-          let x2 = outerEdges[(i + 2) % 3]
-
-          // This is a reflex hull - a hole - so indices run clockwise
-          Triangulation.hullNext[x] = x2;  Triangulation.hullPrev[x] = x1
-        }
-      }
+      } // End each edge
       
       // Save removed triangle id
       emptyTriangles.insert(a0)
-      
-      // Return the external code
-      return externalCode
     } // End of removeTriangle
     
     // Remove any vertex from the triangulation
+    // The vertex being removed
+    if showMe > 0 {
+      print("Remove Vertex => \(vertices[startEdge])")
+    }
+    
     // The initial edge
     var a = startEdge
 
@@ -2363,12 +2170,15 @@ extension Triangulation {
     // We have to note it because triangles will be removed
     let stopEdge = halfEdges[startEdge]
     
-    // Note the boundary code - either specified ot chosen to be not conforming
-    // var foundCode = stopEdge > BoundaryEdge ? EmptyEdge : stopEdge
-    var foundCode = EmptyEdge
+    // Note the boundary code - the default is Delaunay conforming
+    var externalCode = EmptyEdge
     
     // Build a list of vertices
-    var shell = Array<Int>()
+    var shellVertices = Array<Int>()
+    
+    // And a list of the corresponding edges
+    var shellEdges = Array<Int>()
+    
     
     // Go anticlockwise starting at p
     //
@@ -2389,38 +2199,69 @@ extension Triangulation {
     //                p ----------- q
     //
     //
+    //    Need to update the triangulation loops
+    //
+    // Two possibilities; h is on the loop (a convex corner)
+    //                    h is not on the loop (reflex or colinear)
+    let convexCorner = (stopEdge <= BoundaryEdge)
+    if convexCorner {
+      shellEdges.append(startEdge)
+    }
+    
     var a2:Int
     vertexLoop: repeat {
+      func shellCode(_ b:Int) -> Int {
+        if b <= BoundaryEdge {
+          // The boundary code - save a new
+          // code, conforming edges have
+          // an odd code which will be unique
+          // non-conforming may not be unique
+          // but are equivalent
+          
+          // Always save an odd (Voronoi conforming) code
+          // If saved code is even (Delaunay conforming) save the minimum
+          if 1 == b % 2 || (0 == externalCode % 2 && b < externalCode) {
+            externalCode = b
+          }
+        }
+        
+        return externalCode
+      }
+      
       let a0 = 3 * (a / 3)
       let a1 = a0 + (a + 1) % 3
       a2 = a0 + (a + 2) % 3
-
-      // Add the first vertex
-      shell.append(vertices[a1])
       
       // Pivot around h 
       let ha2 = halfEdges[a2]
       let v = vertices[a2]
 
       // Remove the triangle
-      let b = removeTriangle(a0)
-      if 0 == foundCode % 2 {
-        foundCode = 1 == b % 2 ? b : min(b, foundCode)
-      }
+      // Unlink spokes
+      _ = unlink(a)
+      _ = unlink(a2)
+
+      // Save removed triangle id
+      emptyTriangles.insert(a0)
       
-      if showMe > 0 {
-        print("\tShell Vertex => \(shell.last!)")
-      }
+      // Save shell edge and vertex
+      shellVertices.append(vertices[a1])
+      shellEdges.append(a1)
       
+      // Need to obtain the boundary code (if there is one)
+      externalCode = shellCode(halfEdges[a1])
+
       // Is this the stopEdge - can't rely on the halfEdge
       // still being connected
-      if stopEdge == ha2 {
+      if stopEdge == ha2 || ha2 <= BoundaryEdge {
         // If this is a boundary edge the
         // last vertex u has not been added
         // Save it
         
         if stopEdge <= BoundaryEdge {
-          shell.append(v)
+          shellVertices.append(v)
+          shellEdges.append(a2)
+          externalCode = shellCode(ha2)
         }
         
         // All done
@@ -2432,31 +2273,210 @@ extension Triangulation {
       
       // Stop here if edge wasn't disconnected (it will have been)
     } while a2 != stopEdge
+
+    if showMe > 0 {
+      print("Shell")
+      print("\tShell Edges    => \(shellEdges)")
+      print("\tShell Vertices => \(shellVertices)")
+      print("\tShell Code     => \(shellEdges.map({halfEdges[$0]}))")
+    }
     
-    if showMe == -1 {
-      print("Removed Vertex \(h)")
-      showVoronoi(label: "rv_", type:"Delaunay")
+    // Get each outer edge
+    // They will either be *boundary* edges or *internal* edges
+    // We need to add all the internal edges to the loops, connecting them
+    // up in the right way; and also remove any boundary edges
+    //
+    // When the removed vertex (h) is on the loop (ie a convex hub) the
+    // number of shellCodes will be one less than the number of shellVertices
+    //
+    // Fix the loopEdges -
+    //
+    //      \ *in (prev)
+    //       7....6...5
+    //        \        .   *out (next)
+    //         \        . /
+    //          h        4
+    //         /         |
+    //        /          |
+    //       0           3- *in  (prev)
+    //        \         .
+    //         \       .
+    //          1-----2
+    //               / *out (next)
+    //
+    //   Above example has a shellVertices.count == 8
+    //                       shellCodes.count  == 7
+    //
+    
+    
+    // How the edges are to be processed - essentially edges are turned inside out
+    //
+    //     . d          f .            .\ d         f /.
+    //   g  .            . i           g.\           /.i
+    //       . ...e.... .                .\         /.
+    //       .*––––––––*.           ==>   .*       *.
+    //       .|    h   |.                 .|       |.
+    //      p.|        |.n               p.|       |.n
+    //
+    //
+    //        ....
+    //        ____ boundary (inside is up)
+    //
+    //        .... internal
+    //
+    //   First pass skips boundaries
+    //
+    //   Possible pairs are (B = Boundary, I = Internal, F = Flipped Boundary (former internal edge))
+    //   1) B*B
+    //   2) B*I
+    //   3) F*I
+    //   4) F*B
+    //   5) I*I (First edge only)
+    //
+    
+    // Initialize
+    // Get the previous edge (will be type B or I)
+    var d = shellEdges.last!, g = halfEdges[d]
+    
+    // Now process each shell edge in turn (anti-clockwise order)
+    for (j, e) in shellEdges.enumerated() {
+      // Previous edge pair is (d, g)
+      // This edge pair is (e, h)
+      
+      // We have not unlinked these edges yet
+      let h = unlink(e)
+      
+      // Possible options
+      // I*I, B*I, F*I
+      if h > BoundaryEdge {
+        // Type F*I
+//        if d <= BoundaryEdge {
+//          // Type F*I
+//          Triangulation.hullNext[h] = g
+//          Triangulation.hullPrev[g] = h
+//          if showMe > 0 {
+//            print("\t\(j) F*I Turn  \(h) into a boundary")
+//          }
+//        } else if g <= BoundaryEdge {
+//          // Type B*I
+//          let n = Triangulation.hullNext[d]!
+//          Triangulation.hullNext[h] = n
+//          Triangulation.hullPrev[n] = h
+//
+//          if showMe > 0 {
+//            print("\t\(j) B*I Connect \(h) to output \(n)")
+//          }
+//
+//          // Can delete d
+//          Triangulation.hullNext[d] = nil
+//          Triangulation.hullPrev[d] = nil
+//        } else if 0 == j {
+//          // Type I*I
+//          Triangulation.hullNext[h] = g
+//          Triangulation.hullPrev[g] = h
+//          if showMe > 0 {
+//            print("\t\(j) I*I Connect \(h) to last edge \(g)")
+//          }
+//        } else  {
+//          // I*I can only occur on first call
+//          throw triangulationError.initError("Found unexpected edge pair status")
+//        }
+        
+        if g <= BoundaryEdge {
+          // Type B*I
+          let n = Triangulation.hullNext[d]!
+          Triangulation.hullNext[h] = n
+          Triangulation.hullPrev[n] = h
+          
+          if showMe > 0 {
+            print("\t\(j) B*I Connect \(h) to output \(n)")
+          }
+          
+          // Can delete d
+          Triangulation.hullNext[d] = nil
+          Triangulation.hullPrev[d] = nil
+        } else if d <= BoundaryEdge || 0 == j {
+          // Type F*I or I*I
+          Triangulation.hullNext[h] = g
+          Triangulation.hullPrev[g] = h
+          if showMe > 0 {
+            print("\t\(j) (F|I)*I Turn  \(h) into a boundary")
+          }
+        } else  {
+          // I*I can only occur on first call
+          throw triangulationError.initError("Found unexpected edge pair status")
+        }
+        
+        // Set the edge code
+        halfEdges[h] = externalCode
+        d = externalCode
+        
+      } else {
+        // Type *B
+        if d <= BoundaryEdge {
+          // Type F*B
+          let p = Triangulation.hullPrev[e]!
+          Triangulation.hullPrev[g] = p
+          Triangulation.hullNext[p] = g
+          if showMe > 0 {
+            print("\t\(j) F*B Connect \(g) to input \(p)")
+          }
+        } else if g <= BoundaryEdge {
+          // Type B*B
+          // Can delete d (previous boundary) from loop
+          if showMe > 0 {
+            print("\t\(j) B*B delete \(d)")
+          }
+          
+          // Can delete d (unless first call)
+          if 0 != j {
+            Triangulation.hullNext[d] = nil
+            Triangulation.hullPrev[d] = nil
+          }
+        } else {
+          // Nothing to do for B*B; I*B should be impossble
+          throw triangulationError.initError("Found unexpected edge pair status")
+        }
+        d = e
+      }
+      
+      // Update edges
+      g = h
+    }
+    
+    // Delete boundary
+    if convexCorner {
+      d = shellEdges.last!
+      Triangulation.hullNext[d] = nil
+      Triangulation.hullPrev[d] = nil
+    }
+    
+    if showMe > 0 {
+      print("Removed Vertex \(vertices[startEdge])")
+      //showVoronoi(label: "rv_", type:"Delaunay")
     }
     
     // Now use the shell of vertices to define a zone - use full machinery to reattach
     // At the moment this doesn't add any extra points but does
     // add vertices and triangles
     // treat it as if it did add points
-    let localZone = Zone(given: shell, code: foundCode)
+    let localZone = Zone(given: shellVertices, code: externalCode)
 
     // Consider reusing empty triangles to avoid this step
     Triangulation.pointCount += localZone.polygonCount
     growTriangulation(to: Triangulation.pointCount)
 
     // Next triangulate this zone
-    for z in localZone.convexZones {      
+    for z in localZone.convexZones {
+      // Tracl this
+      
       // Add the zone to the triangulation
       let convexHullNext = try! addVertices(indices: z.zoneIndices, boundary: z.code)
       
       // Join convexZones together
       try! join(loop: convexHullNext, rejoin: true)
       
-      if showMe == -1 {
+      if showMe > 2 {
         print("Joined convex zone \(z)")
         showVoronoi(label: "jz_", type: "Voronoi")
       }
@@ -2547,7 +2567,7 @@ extension Triangulation {
   }
   
   // Left flip
-  mutating func flipLeft(edge a:Int, unconditional forceFlip:Bool = false) -> Bool {
+  mutating func flipLeft(edge a:Int, unconditional forceFlip:Bool = false) -> Dictionary<Int, Int>? {
     /* flip an edge a
      *
      *    Input edge is a - need not to disturb neighbouring spoke b2
@@ -2567,8 +2587,10 @@ extension Triangulation {
      *
      *
      */
+    var flipList = Dictionary<Int, Int>()
+    
     let b = halfEdges[a]
-    if b <= BoundaryEdge { return false }
+    if b <= BoundaryEdge { return nil }
     
     // Get the edges associated with each triangle
     // Triangle a
@@ -2602,7 +2624,7 @@ extension Triangulation {
         px: Triangulation.coords[2 * p], py: Triangulation.coords[2 * p + 1])
 
       // If not illegal all done
-      if !illegal { return false }
+      if !illegal { return nil }
     }
     
     // Proceed with the flip
@@ -2621,13 +2643,19 @@ extension Triangulation {
     // This can perturb boundary at b1 => a and a1 => b
     if hb1 <= BoundaryEdge {
       loopEdges(edge: a, replaces: b1)
+      
+      // Means b1 replaced by a
+      flipList[b1] = a
     }
     if ha1 <= BoundaryEdge {
       loopEdges(edge: b, replaces: a1)
+      
+      // Means a1 replaced by b
+      flipList[a1] = b
     }
     
     // Return that it flipped
-    return true
+    return flipList
   }
 
   // is a vertex in a loop
@@ -2744,7 +2772,7 @@ extension Triangulation {
     return t
   }
   
-  mutating func addVertex(inside a:Int, vertex p:Int) -> Dictionary<Int, Int> {
+  mutating func addVertex(inside a:Int, vertex p:Int) -> Array<Int> {
     // Add the new vertex p to the triangulation
     // Other initial edges
     // Compute next edge
@@ -2802,11 +2830,12 @@ extension Triangulation {
       loopEdges(edge: c, replaces: a2)
     }
     
-    return [a : a, a1 : b, a2 : c]
+    return [a, b, c]
   }
   
   // Add a vertex exactly on an edge - only happens with degenerate input in practice
-  mutating func addVertex(on a:Int, vertex p:Int) -> Dictionary<Int, Int> {
+  mutating func addVertex(on a:Int, vertex p:Int) -> Array<Int> {
+
     // Collinear - two cases; input vertex is internal or input vertex is a new hull vertex
     //   New point added *exactly* on edge joining vertices q->n; separating triangles A and B
     //
@@ -2887,22 +2916,20 @@ extension Triangulation {
       }
       
       // Return outer edges
-      return [a1 : a1, a2 : d + 2, b1 : c + 1, b2 : b2]
+      return [a1, d + 2, c + 1, b2]
     } else {
-      // Partially replaced - will have to handle this correctly when called
-      
       // a (q->n) was a boundary edge; and is replaced by
       // d (q->p) and a (p->n)
       loopEdges(insert: d, before: a)
       
       // Return outer edges
-      return [a : d, a1 : a1, a2 : d + 2]
+      return [a1, d + 2, d, a]
     }
     
   }
   
   // General add a vertex given only an edge hint
-  mutating func addVertex(near hint:Int, vertex p:Int) -> Dictionary<Int, Int>? {
+  mutating func addVertex(near hint:Int, vertex p:Int) -> Array<Int>? {
     var onEdge = EmptyEdge
     
     // Find a triangle enclosing a vertex p
@@ -2963,7 +2990,12 @@ extension Triangulation {
             if !searchedTriangles.contains(h0) { searchStack.append(ha1) }
           }
         } else if 0 == o1 {
-          onEdge = a1
+          // Is the vertex p between the two endpoints (e, i)
+          if isBetween(first: e, second: i, middle: p) {
+            onEdge = a1
+            return onEdge
+          }
+          found = false
         }
         
         // Edge a2 (i->e)
@@ -2979,15 +3011,13 @@ extension Triangulation {
             if !searchedTriangles.contains(h0) { searchStack.append(ha2) }
           }
         } else if 0 == o2 {
-          if onEdge == EmptyEdge {
+          // Is the vertex p between the two endpoints (i, q)
+          if isBetween(first: i, second: q, middle: p) {
             onEdge = a2
-          } else {
-            // If on two different edges it must be identical
-            // to an existing vertex
-            // In this case (i)
-            // Vertex count starts at zero so return -(i+1) (which is always negative)
-            return -(i + 1)
+            return onEdge
           }
+        
+          found = false
         }
         
         // Need to consider a
@@ -3006,14 +3036,13 @@ extension Triangulation {
           // If no orientations were negative all done
           // If one orientaton is zero
           if 0 == o {
-            if onEdge == EmptyEdge {
+            // Is the vertex p between the two endpoints (q, e)
+            if isBetween(first: q, second: e, middle: p) {
               onEdge = a
-            } else {
-              // Could be identical to e or q
-              // BUT this should never happen
-              // because ot would have been detected earlier
-              throw triangulationError.initError("Found an unexpected identical vertex to \(p) => (\(px), \(py))")
+              return onEdge
             }
+            
+            found = false
           }
           return a0
         } // End of findTriangle
@@ -3023,17 +3052,18 @@ extension Triangulation {
         
         // Get next stack entry
         a = searchStack.popLast() ?? EmptyEdge
-        if EmptyEdge == a { throw triangulationError.initError("Couldn't find a triangle that encloses vertax \(p) => (\(px), \(py))")}
+        if EmptyEdge == a {
+          throw triangulationError.initError("Couldn't find a triangle that encloses vertax \(p) => (\(px), \(py))")}
       } while true
     }
     
     // Use a nested function - this can be unwrapped
     let t = try! findTriangle(edge: hint, vertex: p)
-    if t < 0 {
-      // No need to add the vertex to the triangulation; it is there already
-      return nil
+    if EmptyEdge == onEdge {
+      return addVertex(inside: t, vertex: p)
     }
-    return EmptyEdge == onEdge ? addVertex(inside: t, vertex: p) : addVertex(on: onEdge, vertex: p)
+    return addVertex(on: onEdge, vertex: p)
+    //return EmptyEdge == onEdge ? addVertex(inside: t, vertex: p) : addVertex(on: onEdge, vertex: p)
   }
 
  
@@ -3050,7 +3080,7 @@ extension Triangulation {
     // edge a2 connecting vertex i->q
     
     // If multiple flips occur a connected region of flipped triangles
-    // is created; a perimeter of replaced edges could be recorded (but it isn't!)
+    // is created; a perimeter of replaced edges could be recorded
     // So first flip is which creates perimeter [a,b1]
     // If a is flipped into another triangle c this becomes [a, c1, b] and so on
     
@@ -3380,9 +3410,6 @@ extension Triangulation {
     return vtkString
   }
   
-  
-  
-  
   // Get a list of Voronoi zones
   mutating func toVoronoi() -> Int {
     // Create triangleCentres
@@ -3435,7 +3462,6 @@ extension Triangulation {
           
           // Polygons can have degenerate entries!!
           // The points are mapped to vertices
-          //let scale = 2 * (p![0] * p![0] + p![1] * p![1])
           checkDuplicate: for j in polygon {
             let q = triangleCentres[j]!
             let x = dist(q[0], q[1], p![0], p![1])
@@ -3536,12 +3562,21 @@ extension Triangulation {
     var string = "# Yaml File\n"
     string += "name: \(Zone.name)\n"
     string += "id: \(Zone.zoneID)\n"
+    // Associated code
+    let code = Triangulation.code[zoneVertex.last!]
+    if NoZoneCode != code {
+      let rho = Zone.globalProperties?.randomDensity
+      string += "properties:\n"
+      string += "  id: \(-code)\n"
+      string += "  randomDensity: \(2 * (rho ?? 0))\n"
+    }
+    
     string += "iteration: \(Zone.iteration)\n"
     string += "zones:\n"
     for i in 0..<zoneList.count {
       let polygon = zoneList[i]
 
-      string += "  - polygon:\n"
+      string += "  - list:\n"
       string += "      ["
       
       for p in polygon {
@@ -3551,12 +3586,7 @@ extension Triangulation {
       }
       string += "]\n"
       
-      // Associated code
-      let code = Triangulation.code[zoneVertex[i]]
-      if NoZoneCode != code {
-        string += "    properties:\n"
-        string += "      id: \(code)\n"
-      }
+
     }
     
     // Label all the points
@@ -3584,10 +3614,11 @@ extension Triangulation {
     string += "id: \(Zone.zoneID)\n"
     string += "iteration: \(Zone.iteration)\n"
     string += "zones:\n"
+    
     for z in zoneList {
       let polygon = z.zoneIndices
       
-      string += "  - polygon:\n"
+      string += "  - list:\n"
       string += "      ["
       
       for i in 0..<z.polygonCount {
@@ -3603,10 +3634,11 @@ extension Triangulation {
         string += "    properties:\n"
         string += "      id: \(id)\n"
       }
+      
       // Extra points
       var i = z.polygonCount
       while i < z.zoneIndices.count {
-        coordinates.append(i)
+        coordinates.append(z.zoneIndices[i])
         i += 1
       }
     }
@@ -3646,15 +3678,15 @@ extension Triangulation {
   }
 
   // Logging
-  private func showVoronoi(label s:String, type flag: String = "Voronoi") {
+  internal func showVoronoi(label s:String, type flag: String = "Voronoi") {
     showCount += 1
     let i = showCount
     
     // Debugging - More information
-    if (showMe > 1)  {
+    if (showMe > 100)  {
       // And a vtk file - voronoi
       let folder = try! Folder(path: OutputFolder)
-      let filename = "\(flag.lowercased())_" + s + String(format:"%04d.vtk", i)
+      let filename = "edges_" + s + String(format:"%04d.vtk", i)
       let file = try! folder.createFile(named: filename)
       try! file.write(vtkEdges(label: "\(i-1)", type: flag))
     }
@@ -3727,44 +3759,32 @@ func inCircumCircle(ax: (Double), ay: (Double),
   return det > errbound
 }
 
-// Get the circum-radius
-func circumRadius(_ ax: Double, _ ay: Double,
-                  _ bx: Double, _ by: Double,
-                  _ cx: Double, _ cy: Double) -> Double {
-  // Points a, b, c
-  // Form a triangle
-
-  let dx = bx - ax
-  let dy = by - ay
-  let ex = cx - ax
-  let ey = cy - ay
-
-  let bl = dx * dx + dy * dy
-  let cl = ex * ex + ey * ey
-  let d = 0.5 / (dx * ey - dy * ex)
-
-  // Is zero present in this list?
-  if ([bl, cl, d].contains {isZero($0)} ) {
-    return 0
-  }
-
-  // Compute r squared
-  let x = (ey * bl - dy * cl) * d
-  let y = (dx * cl - ex * bl) * d
-
-  return x * x + y * y // r
+// Get the circum-radius squared
+func circumRadius(_ px: Double, _ py: Double,
+                  _ qx: Double, _ qy: Double,
+                  _ rx: Double, _ ry: Double) -> Double {
+  // Denominator
+  let c = circumCentre(px, py, qx, qy, rx, ry)
+  let dx = c[0] - rx, dy = c[1] - ry
+  return dx * dx + dy * dy // r2
 }
 
 // Get the centre of the circumcircle
-func circumCentre(_ ax: (Double), _ ay: (Double),
-                  _ bx: (Double), _ by: (Double),
-                  _ cx: (Double), _ cy: (Double)) -> [Double] {
-  let ad = ax * ax + ay * ay
-  let bd = bx * bx + by * by
-  let cd = cx * cx + cy * cy
-  let D = ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)
-  return [0.5 / D * (ad * (by - cy) + bd * (cy - ay) + cd * (ay - by)),
-          0.5 / D * (ad * (cx - bx) + bd * (ax - cx) + cd * (bx - ax))]
+func circumCentre(_ px: (Double), _ py: (Double),
+                  _ qx: (Double), _ qy: (Double),
+                  _ rx: (Double), _ ry: (Double)) -> [Double] {
+  // Check orientation
+  let o2d = orientIfSure(px, py, qx, qy, rx, ry)
+  if o2d == 0 { return [Double.infinity, Double.infinity]}
+  
+  let pxrx = px - rx, pyry = py - ry
+  let qxrx = qx - rx, qyry = qy - ry
+  let prdx = pxrx * pxrx + pyry * pyry
+  let qrdx = qxrx * qxrx + qyry * qyry
+  let detx = qyry * prdx - pyry * qrdx
+  let dety = pxrx * qrdx - qxrx * prdx
+  
+  return [rx + 0.5 * detx / o2d, ry + 0.5 * dety / o2d]
 }
 
 // Get the centre of the incircle
@@ -3805,7 +3825,6 @@ func orientIfSure(_ ax: (Double), _ ay: (Double),
   // Zero     - colinear
   // Negative - clockwise
   let det = detLeft - detRight
-  //let det = detRight - detLeft
 
   return abs(det) > orientThreshold * abs(detLeft + detRight) ? det : 0
 }
@@ -3816,6 +3835,24 @@ func orient(_ ax: (Double), _ ay: (Double),
             _ cx: (Double), _ cy: (Double)) -> Bool {
   // Just a wrapper
   return orientIfSure(ax, ay, bx, by, cx, cy) > 0
+}
+
+func isBetween(first i:Int, second j:Int, middle k:Int) -> Bool {
+  // Is the point k between the points i & j
+  let ax = Triangulation.coords[2 * i]
+  let bx = Triangulation.coords[2 * j]
+  
+  // Try abscissae first
+  if ax != bx {
+    let cx = Triangulation.coords[2 * k]
+    return (ax - cx) * (bx - cx) <= 0
+  }
+  
+  // Use the ordinates
+  let ay = Triangulation.coords[2 * i + 1]
+  let by = Triangulation.coords[2 * j + 1]
+  let cy = Triangulation.coords[2 * k + 1]
+  return (ay - cy) * (by - cy) <= 0
 }
 
 // Reflect the point c in the line from a to b
@@ -3839,10 +3876,298 @@ func reflect(_ cx:Double, _ cy:Double, _ ax:Double, _ ay:Double, _ bx:Double, _ 
   return count
 }
 
+// Obtain a point a unit length away from c along a vector perpendicular to the vector
+// from a to b after an anticlockwise rotation
+func perpendicular(scale r2:Double, _ cx:Double, _ cy:Double, _ ax:Double, _ ay:Double, _ bx:Double, _ by:Double) -> Array<Double> {
+  // It's useful to compute some properties of this mirror line
+  let dx  = bx - ax
+  let dy  = by - ay
+  let f = (r2 / (dx * dx + dy * dy)).squareRoot() // dist(....)
+    
+  // The rotated point co-ordinates
+  let rx  = cx - f * dy
+  let ry  = cy + f * dx
+  
+  // The point
+  return [rx, ry]
+}
+
+/* Deprecated functions to be replaced in final clean up */
+
 // Near zero
 func isZero(_ x: Double) -> Bool {
   return (x <= Epsilon) && (x >= -Epsilon)
 }
 
+/*
+ func newOneBoundary() {
+ let x = lastBoundaryEdge
+ 
+ // One outer edge to remove (at x) - two to add
+ let x1 = (x + 1) % 3
+ let x2 = (x + 2) % 3
+ 
+ // When one edge is a boundary there is a single vertex opposing this edge
+ let q = vertices[a0 + x2]
+ 
+ // In general q can be one several loops
+ // But can only be on several loops if it is a hub
+ // And if it is a hub it will soon be removed
+ //
+ // So need only consider the current loop
+ 
+ // Is q on this loop?
+ var e = a0 + x
+ repeat {
+ e = Triangulation.hullNext[e]!
+ if q == vertices[e] {
+ break
+ }
+ } while e != a0 + x
+ 
+ // First step is patch in new edges
+ //
+ //       p
+ //      /.
+ //  O1 / .   Here removing spoke x connecting h to p
+ //    /  .   simply adds O2 and O1 to the loop
+ //   q x .
+ //    \  .
+ //     \ .
+ //   O2 \.
+ //       h
+ 
+ 
+ // Next step is to patch it in to another loop if needed
+ if e != a0 + x {
+ // q is on the same loop
+ // This creates a new loop
+ //
+ //   |   p
+ //   |O1/.
+ //A1 | / .   Here removing spoke x connecting h to p makes
+ //   |/  .   vertex q == vertices[x2] more polyvalent
+ //   q x .   by splitting a loop into two
+ //   |\  .   After:
+ //A2 | \ .   A1 -> O1; O2 -> A2
+ //   |O2\.
+ //   |   h
+ 
+ // This splits this loop into two :(
+ loopEdges(edge: outerEdges[x1], replaces: a0 + x)
+ loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
+ // Splice this in
+ loopEdges(splice: outerEdges[x1], at: e)
+ } else {
+ loopEdges(edge: outerEdges[x1], replaces: a0 + x)
+ loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
+ }
+ }
+ */
 
-
+/*
+// Remove a triangle
+// Old version
+func removeTriangle(_ a:Int, _ a0:Int) -> Int {
+  var externalCode = EmptyEdge // The default boundary code
+  
+  // Unlink half edges
+  var numberBoundaries = 0
+  var lastBoundaryEdge = -1, lastInternalEdge = -1
+  var outerEdges = Array<Int>(repeating: 0, count: 3)
+  for i in 0...2 {
+    let b = unlink(a0 + i)
+    outerEdges[i] = b
+    
+    // Record which boundaries were which
+    if b <= BoundaryEdge {
+      lastBoundaryEdge = i
+      numberBoundaries += 1
+      
+      // The boundary code - save a new
+      // code, conforming edges have
+      // an odd code which will be unique
+      // non-conforming may not be unique
+      // but are equivalent
+      
+      // Always save an odd (Voronoi conforming) code
+      // If saved code is even (Delaunay conforming) save the minimum
+      if 1 == b % 2 || (0 == externalCode % 2 && b < externalCode) {
+        externalCode = b
+      }
+    } else {
+      lastInternalEdge = i
+    }
+  } // End of outerEdges
+  
+  // outerEdges records the
+  // neighbouring half edge - unless its a boundary
+  if showMe > 2 {
+    print("\tRemove Triangle")
+    for i in 0...2 {
+      print("\t\tv => \(vertices[a0 + i]) e => \(a0+i)")
+    }
+    
+    print("\t\tBoundaries => \(numberBoundaries)")
+    print("\t\tLast Internal => \(lastInternalEdge)")
+    print("\t\tLast External => \(lastBoundaryEdge)")
+  }
+  
+  // Adjust the loop edges
+  if numberBoundaries == 1 {
+    let x = lastBoundaryEdge
+    
+    // One outer edge to remove (at x) - two to add
+    let x1 = (x + 1) % 3
+    let x2 = (x + 2) % 3
+    
+    // So is q already in the triangulation hull?
+    let q = vertices[a0 + x2]
+    if showMe > 2 {
+      print("\t\t One Existing Boundary")
+    }
+    
+    
+    var loopList = Triangulation.hullNext.compactMap { q == vertices[$0.key] ? $0.key : nil }
+    
+    // Monovalent loop - simple
+    //
+    //       p
+    //      /.
+    //  O1 / .   Here removing spoke x connecting h to p
+    //    /  .   simply adds O2 and O1 to the loop
+    //   q x .
+    //    \  .
+    //     \ .
+    //   O2 \.
+    //       h
+    // Replace
+    loopEdges(edge: outerEdges[x1], replaces: a0 + x)
+    loopEdges(insert: outerEdges[x2], before: outerEdges[x1])
+    
+    // When a triangle is cut away it can either change  the current loop
+    // by adding one more boundary edge to it OR
+    // it can split a loop into two loops
+    //
+    //   |   p
+    //   |  /.
+    //   | / .   Here removing spoke x connecting h to p makes
+    //   |/  .   vertex q == vertices[x2] more polyvalent
+    //   q x .   by splitting a loop into two
+    //   |\  .   After:
+    //   | \ .   A1 -> O1; O2 -> B1
+    // LL|  \.
+    //   |   h   This will be different for internal loops...
+    if !loopList.isEmpty {
+      var listIndex = 0
+      
+      // Is this already a polyvalent loop?
+      if loopList.count > 1 {
+        // This is more tricky
+        // Polyvalent loop - need to identify correct outgoing edge fom q
+        // Which is the one that makes
+        // the sharpest right turn relative to x1
+        loopList.append(outerEdges[x1])
+        
+        // Sort the edges by orientation
+        let q = vertices[a0 + x1]
+        let qx = Triangulation.coords[2 * q], qy = Triangulation.coords[2 * q + 1]
+        loopList.sort {
+          let a = vertices[$0]
+          let b = vertices[$1]
+          let ax = Triangulation.coords[2 * a]
+          let ay = Triangulation.coords[2 * a + 1]
+          let bx = Triangulation.coords[2 * b]
+          let by = Triangulation.coords[2 * b + 1]
+          
+          // Get the relative orientation
+          return orient(ax, ay, bx, by, qx, qy)
+        }
+        
+        // Where is the new edge
+        listIndex = loopList.firstIndex(of: outerEdges[x1])!
+        
+        // We need the one before this
+        listIndex = listIndex > 0 ? listIndex - 1: loopList.count - 1
+      } // Polyvalent loop
+      
+      // Splice this in
+      loopEdges(splice: outerEdges[x1], at: loopList[listIndex])
+    }
+    
+    
+  } else if numberBoundaries == 2 {
+    let x = lastInternalEdge
+    
+    // One outer edge to add (at x) - two to remove
+    let x1 = (x + 1) % 3
+    let x2 = (x + 2) % 3
+    
+    // Are both boundaries in the new loop?
+    // This requires both to be spokes
+    // And x1 is the stopEdge
+    // So x2 must be the other spoke
+    
+    if vertices[a0 + x2] != h {
+      //
+      // In this case the vertex q is already polyvalent
+      //
+      //   |   /
+      // A1|  / A2       Before:
+      //   | /           A1->A2; x1 -> O2; O2->B2
+      //   |/  O2 == B1
+      //   q.......p
+      //   |\     .      After
+      //   |O\   .       A1 -> A2; O->B2
+      // B2|  \ . x1
+      //   |   h
+      
+      //    replace O2 (== B1) with O; delete x1
+      //
+      loopEdges(edge: outerEdges[x], replaces: a0 + x2)
+      loopEdges(delete: a0 + x1)
+      
+    } else {
+      // Monovalent case
+      //
+      //       /
+      //      / A2        Before
+      //     /            O1->A2
+      //    /
+      //   q.......p
+      //    \     .       After
+      //   O \   .        O->A2
+      //      \ .
+      //       h          Replace O1 with O; delete O2
+      loopEdges(edge: outerEdges[x], replaces: a0 + x1)
+      loopEdges(delete: a0 + x2)
+    }
+  } else if 3 == numberBoundaries {
+    // Remove all the loop edges
+    // No splice needed
+    
+    loopEdges(delete: a0)
+    loopEdges(delete: a0 + 1)
+    loopEdges(delete: a0 + 2)
+  } else {
+    // Zero boundaries already present
+    // Can only occur on first call
+    // Initialize a loop with three new boundaries
+    //
+    for i in 0...2 {
+      let x = outerEdges[i]
+      let x1 = outerEdges[(i + 1) % 3]
+      let x2 = outerEdges[(i + 2) % 3]
+      
+      // This is a reflex hull - a hole - so indices run clockwise
+      Triangulation.hullNext[x] = x2;  Triangulation.hullPrev[x] = x1
+    }
+  }
+  
+  // Save removed triangle id
+  emptyTriangles.insert(a0)
+  
+  // Return the external code
+  return externalCode
+} // End of removeTriangle
+*/
