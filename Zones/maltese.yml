@@ -8,9 +8,9 @@ name: maltese
 
 # Default global properties
 properties: &globalProperties
-  randomDensity: 1000
+  randomDensity: 0
   distinct: false
-  showMe: 0
+  showMe: 1
   
 # inverted cross
 # Example of using labels and yaml anchors together to give input flexibility

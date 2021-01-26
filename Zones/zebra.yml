@@ -12,7 +12,7 @@ zones:
        j, k,  l,  m,  n,
        o,  p,  q,  r]
     properties:
-      randomDensity: 100
+      randomDensity: 0
       showMe: 1
 
 points: {

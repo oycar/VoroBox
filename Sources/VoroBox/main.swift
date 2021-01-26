@@ -24,7 +24,7 @@ import Foundation
 import Files
 import Yams
 
-let ZoneFile   = "zoneData.yml"
+let ZoneFile   = "zoneData"
 
 // Read input data using JSON
 do {
@@ -33,14 +33,13 @@ do {
   print ("Zone creation failed with error: \(error)")
 }
 // Write output data
-var filename = "triangleData.json"
+var filename = "cells_" + Zone.name
 do {
   let iteration:Int = Zone.iteration + 1
   let folder = try Folder(path: OutputFolder)
   let conforming = Zone.hullConforming ?? true
   
   // File names - First the filled cells
-  var filename = "cells_" + Zone.name
   if iteration > 1 {
     filename += "\(iteration)"
   }
@@ -71,24 +70,33 @@ do {
   fatalError("Couldn't write \(filename)\n\(error)")
 }
 
-
-//let triangulationData: [Triangulation] = zoneData.map({$0.triangulation ?? Triangulation()})
 func load<T: Decodable>(_ filename: String) -> T {
-  do {
-    // Locate the zone file
-    let file = try Folder(path: ZoneFolder).file(named: filename)
-
-    // read the data
-    let data = try file.read()
-
-    // Unpack the json  and
-    // return the decoded data
+  // Try YAML file first; if not found try JSON
+  var decoder:YAMLDecoder? = YAMLDecoder()
+  let folder = try! Folder(path: ZoneFolder)
+  var f = filename + ".yml"
+  var file:File?
+  if folder.containsFile(named: f) {
+    file = try! folder.file(named: f)
+  } else {
+    // Get json file
+    f = filename + ".json"
+    decoder = nil
+    file = try! folder.file(named: f)
+  }
     
-    if ZoneFile == "zoneData.yml" {
-      return try YAMLDecoder().decode(T.self, from: data)
+  // Unpack the yaml or json file and
+  // return the decoded data
+  do {
+    // read the data
+    let data = try file!.read()
+        
+    if decoder != nil {
+      return try decoder!.decode(T.self, from: data)
     }
     return try JSONDecoder().decode(T.self, from: data)
   } catch {
     fatalError("Couldn't parse \(filename) as \(T.self):\n\(error)")
   }
 }
+

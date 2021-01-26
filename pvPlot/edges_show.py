@@ -29,7 +29,7 @@ colour_map = cc.glasbey_dark
 #_ = plotter.add_point_labels(v, "Labels", point_size=5, font_size=10)
 _ = plotter.add_mesh(v, show_scalar_bar=False, cmap=colour_map)
 #_ = plotter.add_mesh(v, show_scalar_bar=False, cmap=colour_map, color='yellow')
-#_ = plotter.show_bounds(xlabel=label, ylabel='')
+_ = plotter.show_bounds(xlabel=label, ylabel='')
 
 if write_file:
   _ = plotter.show(cpos="xy", screenshot='Plot/' + zone_name + '.png')

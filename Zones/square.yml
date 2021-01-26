@@ -1,0 +1,15 @@
+--- # Square.Yml
+
+#
+# Introduce a simple test file 
+#
+name: square
+properties:
+  randomDensity: 1
+  #showMe: 2
+      
+zones:
+  - list: [a, c, d, e, f]
+  
+points: {a : [0, 0], b : [5, 0], c : [10.0, 0.0], cd : [10, 5], d : [10.0, 10.0], e : [5, 10], f : [0, 10], g : [0, 5]}
+
