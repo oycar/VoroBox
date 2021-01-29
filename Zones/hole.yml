@@ -1,0 +1,19 @@
+--- # Hole.Yml
+
+#
+# Introduce a simple test file 
+#
+# This is establishing h
+name: hole
+properties:
+  randomDensity: 0
+  showMe: 101
+      
+zones:
+  - boundary: [a, b, c, d]
+    holes: [[D, C, B, A] , [G, F, E]]
+  
+points: {a : [1, 0], b : [10.0, 0.0], c : [10.0, 10.0], d : [0, 10],
+  A : [2, 0], B : [4, 2], C : [4, 4], D : [2, 2],
+  E : [7, 1], F : [9, 1], G : [8, 9]}
+

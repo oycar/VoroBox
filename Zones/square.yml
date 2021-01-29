@@ -3,6 +3,7 @@
 #
 # Introduce a simple test file 
 #
+# This is establishing h
 name: square
 properties:
   randomDensity: 1

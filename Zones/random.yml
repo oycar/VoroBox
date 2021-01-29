@@ -5,6 +5,9 @@
 #
 # This uses yaml anchors
 name: random
+properties: &delaunay
+  randomDensity: 200
+  distinct: false
 zones:
 
   # Define a reflex simple polygon
@@ -12,9 +15,7 @@ zones:
               &n [3, 15], &m [1, 13], &l [0, 16], &k [7, 17], &j [10, 15],
               &i [6, 14], &h [8, 10], &g [14, 9], &f [12, 14], &e [10, 12],
               &d [13, 17], &c [20, 8], &cc [21, 8]]
-    properties: &delaunay
-      randomDensity: 200
-      distinct: false
+
 
   - polygon: [&a [10, 7], &b [12, 3], *c, *d, *e, *f, *g, *h, *i, *j, *k, *l, *m, *n, *o, *p,
               &q [5, 5], &r [0, 0]]
@@ -23,4 +24,3 @@ zones:
       distinct: true
 
   - polygon: [&A [-3, -1], &B [21, -1], *cc, *c, *b, *a, *r, *q, *p, *pp]
-    properties: *delaunay

@@ -40,20 +40,20 @@ points: {
 
 zones:
   # Define an inverted Maltese cross
-  # use the labels
-  - list: [a, b, d2, d1, o, l3, l2, h]
-  - list: [c, d, r2, r1, o, d3, d2, b]
-  - list: [e, f, u2, u1, o, r3, r2, d]
-  - list: [g, h, l2, l1, o, u3, u2, f]
+  # Standard method
+  - boundary: [a, c, e, g]
+    # a, d1, o, l3, l2, l1, o, u3, u2, u1, o, r3, r2, r1, o, d3, d2, d1]
+    holes: [[d3, d2, d1, o, l3, l2, l1, o, u3, u2, u1, o, r3, r2, r1, o]]
+      
 
 
   # Define an offset Maltese cross
-  # because we are applying an offset use the anchors
-  - polygon: [*o, *u1, *u2, *u3]
+  # because we are applying an offset use the anchors and the geojson style
+  - polygon: [[*o, *u1, *u2, *u3]]
     origin: [4, 0]
-  - polygon: [*o, *l1, *l2, *l3]
+  - polygon: [[*o, *l1, *l2, *l3]]
     origin: [4, 0]
-  - polygon: [*o, *d1, *d2, *d3]
+  - polygon: [[*o, *d1, *d2, *d3]]
     origin: [4, 0]
-  - polygon: [*o, *r1, *r2, *r3]
+  - polygon: [[*o, *r1, *r2, *r3]]
     origin: [4, 0]
