@@ -828,7 +828,6 @@ extension Triangulation {
     
     // Get each hull loop
     let loopKeys = Triangulation.loopHooks.keys.sorted()
-    //for iº in Triangulation.loopHooks.keys.sorted() {
     for iº in loopKeys {
       // Get a boundary edge from this loop
       let loopStart = Triangulation.loopHooks[iº]!
@@ -1185,7 +1184,7 @@ extension Triangulation {
     // Grow the triangulation
     growTriangulation(to: Triangulation.pointCount)
 
-    // We need to reindex the loops vertices
+    // We need to reindex the loops' vertices
     let loopVertices = Triangulation.loopVertices
     Triangulation.loopVertices.removeAll(keepingCapacity: true)
  
@@ -1216,7 +1215,7 @@ extension Triangulation {
       if showMe > 1 { showLoop(label: "Initial Loop \(iº)", f) }
 
       // Get the next index and hub
-      var convexVertex = EmptyVertex
+      var hookVertex = EmptyVertex
       foldOut: repeat {
         // Get the vertices waiting to be added
         iº += 1
@@ -1233,6 +1232,13 @@ extension Triangulation {
           loopStop = sº
         }
         
+        // Update loop hook
+        if EmptyVertex == hookVertex {
+          // This is the new hook for this loop
+          hookVertex = rº
+          Triangulation.loopHooks[sº] = rº
+        }
+                
         if showMe > 1 {
           let h = list[hIndex]
           print("\tindex => \(iº)")
@@ -1299,13 +1305,8 @@ extension Triangulation {
           // This changes the hull!
           loopEdges(delete: eº + 2)
           loopEdges(delete: fº + 1)
-        } else if EmptyVertex == convexVertex {
-          // This is the new hook for this loop
-          // All loops have some convex corners
-          convexVertex = rº
-          Triangulation.loopHooks[sº] = rº
         }
-    
+        
         if showMe > 1 {
           showLoop(label: "Added Vertex => \(sº)", eº+1)
         }
@@ -1671,14 +1672,11 @@ extension Triangulation {
   
   // This adds the new vertices along each active edge (from one rº => sº)
   mutating func addImages() throws {
-    
     // Get each hull loop
     for (aº, bº) in Triangulation.loopHooks {
       // Find the edge joining the vertices aº & bº
       let loopStart = findLoopEdge(from: aº, to: bº)
-      
-      // By construction (aº, bº) are always (sº, rº) at a convex hub
-      
+            
       // So the stop vertex is aº
       let loopStop = aº
       
@@ -1692,8 +1690,8 @@ extension Triangulation {
       //
       
       // Since loop hook always connected to convex hub this will work
-      var vertexList = Triangulation.loopVertices[bº]
-      
+      var vertexList =  Triangulation.loopVertices[bº]
+        
       // Unpack the vertices
       var qª = vertexList![qIndex], pª = vertexList![pIndex],
           rª = vertexList![rIndex], sª = vertexList![sIndex]
@@ -2552,7 +2550,12 @@ extension Triangulation {
     
   // find an edge joining two adjacent and ordered loop vertices
   func findLoopEdge(from s:Int, to r:Int) -> Int {
-    return Triangulation.hullNext.first(where: {s == vertices[$0.key] && r == vertices[$0.value]})!.key
+    if s != r {
+      return Triangulation.hullNext.first(where: {s == vertices[$0.key] && r == vertices[$0.value]})!.key
+    }
+    
+    // Just get the first loop edge connected to s
+    return Triangulation.hullNext.first(where: {s == vertices[$0.key]})!.key
   }
   
   // Delete edge e from the boundary

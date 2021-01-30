@@ -127,7 +127,6 @@ extension Zone {
     // a reflex polygon - so we need to create a collection
     // of convex zones
     
-    
     // We are given the co-ordinates
     // Either as labelled points in a list of strings
     // Need to find the points that correspond to these
@@ -135,24 +134,30 @@ extension Zone {
     if var list = stored.boundary {
       func add(to indices:inout Array<Int>, fromLabels list:Array<String>) {
         // Add the indices
+        // Add the indices
         for label in list {
           let i = Zone.labelledPoints[label]!
-          
-          // Each index can only occur once in each ring
-          if indices.contains(i) {
-            // Duplicate this point
-            let p = [Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1]]
-            
-            // A new point if none found - input points are treated as members of a triangulation
-            Triangulation.coords.append(contentsOf: p)
-            Triangulation.code.append(NoZoneCode)
-            
-            indices.append(Triangulation.pointCount)
-            Triangulation.pointCount += 1
-          } else {
-            indices.append(i)
-          }
+          indices.append(i)
         }
+        
+//        for label in list {
+//          let i = Zone.labelledPoints[label]!
+//
+//          // Each index can only occur once in each ring
+//          if indices.contains(i) {
+//            // Duplicate this point
+//            let p = [Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1]]
+//
+//            // A new point if none found - input points are treated as members of a triangulation
+//            Triangulation.coords.append(contentsOf: p)
+//            Triangulation.code.append(NoZoneCode)
+//
+//            indices.append(Triangulation.pointCount)
+//            Triangulation.pointCount += 1
+//          } else {
+//            indices.append(i)
+//          }
+//        }
       }
       
       // Check ordering
@@ -207,9 +212,11 @@ extension Zone {
           p[j] = origin[j] + scale * p[j]
         }
         
-        // Can reuse points from earlier rings
+        //// Can reuse points from earlier rings
         
-        for i in 0..<pointCount {
+        //for i in 0..<pointCount {
+        for i in 0..<Triangulation.pointCount {
+
           let x = dist(Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1], p[0], p[1])
 
           // Is this a matching point?
@@ -606,143 +613,22 @@ extension Zone {
       // Any conflicting indices?
       if !conflictingLoop.isEmpty {
         // Need to splice this loop in
-        self.splice(hole: conflictingLoop, at: conflictsWith)
+        polygonCount += conflictingLoop.count + 2
+        
+        // Create a link
+        zoneIndices.insert(contentsOf: [zoneIndices[conflictsWith], conflictingLoop.first!], at: conflictsWith)
+        
+        // Add the loop
+        if conflictsWith > 0 {
+          zoneIndices.insert(contentsOf: conflictingLoop, at: conflictsWith + 1)
+        } else {
+          zoneIndices.append(contentsOf: conflictingLoop)
+        }
       }
 
     } while !conflictingLoop.isEmpty
 
   } // End clips
-  
-  mutating func splice(hole loop:Array<Int>, at i:Int) {
-    // Add the loop of vertices at vertex i
-    // This only changes polygonCount and the perimeter list
-    polygonCount += loop.count + 2
-    
-    // Duplicate points for the link between the boundary and the hole
-    var link = Array<Int>()
-    for i in [zoneIndices[i], loop.first!] {
-      let p = [Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1]]
-    
-      // A new point if none found - input points are treated as members of a triangulation
-      Triangulation.coords.append(contentsOf: p)
-      Triangulation.code.append(NoZoneCode)
-    
-      link.append(Triangulation.pointCount)
-      Triangulation.pointCount += 1
-    }
-        
-    // Create a link
-    zoneIndices.insert(contentsOf: link, at: i)
-
-    // Add the loop
-    if i > 0 {
-      zoneIndices.insert(contentsOf: loop, at: i + 1)
-    } else {
-      zoneIndices.append(contentsOf: loop)
-    }
-  }
-  
-  
-//  // Clip the zone
-//  mutating func clipZone() throws {
-//    // Anything less than quadrilateral is convex
-//    if polygonCount < 4 { return }
-//
-//    // get the initial ear list
-//    var ears:Array<Int> = try listEars()
-//
-//    // Determine which ears should be clipped
-//    // Finished when all are ears
-//    // Keep track of the last clipped zone
-//    var convexZone:Zone? = nil
-//    untilConvex: while polygonCount > 3 && ears.count < polygonCount {
-//      // For testing turn off reverible clip
-//      var reversibleClip = true
-//
-//      // Get the ear at the end of the list
-//      let i = ears.last!
-//
-//      // Clip corner i
-//      // New triangular zone (i-1, i, i+1)
-//      let z = Zone(clip: self, ear: i - 1, order: 3)
-//
-//      // Update this polygon
-//      zoneIndices.remove(at: i)
-//      polygonCount -= 1
-//
-//      // Update ear status - but not needed for
-//      // triangular zones
-//      if polygonCount > 3 {
-//        // update ear status - update polygon - n.b. all done if triangular
-//        // Remove last ear
-//        _ = ears.popLast()
-//
-//        // Status of points (i - 1) & (new) point i has changed
-//        // Note that (i - 1) >= 0 since i >= 1
-//        // Also record if this is reversible clip
-//        if isDiagonal(first: i - 2, second: i) {
-//          // Point i - 1 is now an ear
-//          if ears.last != (i - 1) {
-//            // Created a new ear
-//            reversibleClip = false
-//            ears.append(i - 1)
-//          }
-//        } else { // (i - 1) is not an ear
-//          // Remove ear is this point present
-//          reversibleClip = false
-//          if ears.last == (i - 1) {
-//            _ = ears.popLast()
-//          }
-//        }
-//
-//        // Check if (new) point i is an ear
-//        if isDiagonal(first: i - 1,
-//                      second: i + 1) {
-//          // Yes so is the next recorded ear at point i
-//          // But this might be i == polygonCount
-//          //
-//          if i % polygonCount > 0 {
-//            // No so can simply append the new ear to the list
-//            ears.append(i)
-//          } else if ears.first != 0 {
-//            // If the zeroth point not already an ear
-//            // then insert an extra ear at the start
-//            ears.insert(0, at:0)
-//          }
-//
-//          // Not reversible
-//          reversibleClip = false
-//
-//        } else { // point [i] is not an ear
-//          // Remove ear if this point is present
-//          // But this only happens if [i] is [0]
-//          // and if ears[0] == 0
-//          if ears.first == (i % polygonCount) {
-//            reversibleClip = false
-//            ears.removeFirst()
-//          }
-//        }
-//      }
-//
-//      // Update convexZone with the clip
-//      convexZone = nil == convexZone ? z : try! convexZone!.addTriangularZone(triangle: z)
-//
-//      // If a clip is not reversible we can clear the saved zone
-//      if !reversibleClip {
-//        // Not reversible so any saved zone is stored
-//        convexZones.append(convexZone!)
-//
-//        // Update the saved zone
-//        convexZone = nil
-//      }
-//    } // Until convex
-//
-//    // Got to here - still need to save any unattached zone
-//    if convexZone != nil {
-//      convexZones.append(convexZone!)
-//    }
-//  } // End clips
-//
   
   mutating func addTriangularZone(triangle t:Zone) throws -> Zone {
     // Given a trangular zone t add it to
@@ -947,6 +833,7 @@ extension Zone {
       let e = [index, (index + 1) % polygonCount]
       
       // Is i or j included in this edge?
+      // Is the vertex at i or the vertex at j included in this edge?
       if !e.contains(ij[0]) && !e.contains(ij[1]) {
         // Is a duplicate of i or j included in this edge?
         if e.contains(where: {isDuplicate(i, $0)}) || e.contains(where: {isDuplicate(j, $0)}) {
@@ -968,15 +855,15 @@ extension Zone {
   
   // isEqual
   //
-  // is a vertex a duplicate?
+  // is a vertex a duplicate? -- simplified version --
   func isDuplicate(_ i:Int, _ j:Int) -> Bool {
     let v = zoneIndices[(i + polygonCount) % polygonCount],
         w = zoneIndices[(j + polygonCount) % polygonCount]
-    if v == w { return false } // The identical point
-    
-    // Equal but not identical
-    return (Triangulation.coords[2 * v] == Triangulation.coords[2 * w]) &&
-           (Triangulation.coords[2 * v + 1] == Triangulation.coords[2 * w + 1])
+    //if v == w { return true } // The identical point
+    return v == w
+//    // Equal but not identical
+//    return (Triangulation.coords[2 * v] == Triangulation.coords[2 * w]) &&
+//           (Triangulation.coords[2 * v + 1] == Triangulation.coords[2 * w + 1])
   }
   
   // Do two edges s = [a, b] and t = [c, d] intersect?
