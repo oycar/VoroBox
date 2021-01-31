@@ -75,8 +75,7 @@ let squaredThreshold:Double = (2.0 +        Epsilon) * Epsilon
 let circleThreshold:Double = (10.0 + 96.0 * Epsilon) * Epsilon
 internal let orientThreshold:Double = circleThreshold
 
-internal let ProjectFolder = ProcessInfo.processInfo.environment["HOME"]!  + "/CloudStation/Projects/Vorobox"
-//internal let ProjectFolder = FileManager.default.currentDirectoryPath
+internal let ProjectFolder = ProcessInfo.processInfo.environment["HOME"]!  + "/CloudStation/Projects/VoroBox"
 internal let ZoneFolder = ProjectFolder + "/Zones"
 internal let OutputFolder = ProjectFolder + "/Output"
 internal var showCount = 0

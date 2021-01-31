@@ -205,7 +205,6 @@ extension Zone {
       }
       
       // The points are mapped to vertices
-      let pointCount = Triangulation.pointCount
       roundPolygon: for k in 0..<polygon.count {
         var p = polygon[k]
         for j in 0...1 {
@@ -302,12 +301,20 @@ extension Zone {
     var newList = Array<Int>()
     
     // Add defined points
-    for i in pointList {
+    nextPoint: for i in pointList {
       // Do we have an unattached specified point?
       let x = Triangulation.coords[2 * i], y = Triangulation.coords[2 * i + 1]
       
       // Is this inside this zone?
-      if polygonCount == 0 || isInside(query_x: x, query_y: y) {
+      if polygonCount == 0 || isInside(boundary:zoneIndices, size: polygonCount, query_x: x, query_y: y) {
+        // Exclude points that are inside any hole
+        for h in holeIndices {
+          if isInside(boundary: h.reversed(), size: h.count, query_x: x, query_y: y) {
+            // Inside a hole
+            continue nextPoint
+          }
+        }
+        
         // Yes this point is inside this zone
         zoneIndices.append(i)
         
@@ -349,12 +356,20 @@ extension Zone {
       r.round(.up)
       
       // Add the points
-      for _ in 0..<Int(r) {
+      nextRandomPoint: for _ in 0..<Int(r) {
         // Add points inside  the zone
         let x = Double.random(in: minX...maxX), y = Double.random(in: minY...maxY)
         
         // Append the point
-        if isInside(query_x: x, query_y: y) {
+        if isInside(boundary: zoneIndices, size: polygonCount, query_x: x, query_y: y) {
+          // Skip any inside a hole
+          for h in holeIndices {
+            if isInside(boundary: h.reversed(), size: h.count, query_x: x, query_y: y) {
+              // Inside a hole
+              continue nextRandomPoint
+            }
+          }
+          
           // New point - set coordinates
           Triangulation.coords.append(x)
           Triangulation.coords.append(y)
@@ -370,44 +385,6 @@ extension Zone {
     } // Add random points
     
     return newList
-  }
-  
-  // Is the point p inside the current zone?
-  func isInside(query_x queryX:Double, query_y queryY:Double) -> Bool {
-    // Check each edge in the polygon hull
-    // Count all the times a horizontal ray
-    // heading to infinity from the query point
-    // crosses the hull
-    if polygonCount < 3 {
-      return false
-    }
-    
-    // Get each edge of the perimeter
-    var crossings = 0
-    for i in 0..<polygonCount {
-      // Each edge is bounded by a pair of points p, q
-      let j = (i + 1) % polygonCount
-      let py = Triangulation.coords[2 * zoneIndices[i] + 1] - queryY,
-      qy = Triangulation.coords[2 * zoneIndices[j] + 1] - queryY
-      
-      // When equal to zero need to include
-      // one boundary point (p) and exclude
-      // the other (q) otherwise
-      // crossings will be double-counted
-      if (py >= 0) != (qy > 0) {
-        let px = Triangulation.coords[2 * zoneIndices[i]] - queryX,
-        qx = Triangulation.coords[2 * zoneIndices[j]] - queryX
-        
-        // Sum area signs
-        let area = orientIfSure(px, py, qx, qy, 0, 0)
-        if area != 0 {
-          crossings += area > 0 ? 1 : -1
-        }
-      } // End of if both same sign
-    }
-    
-    // True if positive
-    return crossings > 0
   }
   
   // Extra geometric primitives for zones
@@ -802,48 +779,52 @@ extension Zone {
     // The diagonal is within the cone if the score is less than two
     return score < 2
   }
+ 
+  /*
+  //  isVisible:  Is vertex at (i) visible to vertex at (j) (or vice-versa)
+  //
+  // For weak simple polygons this will fail because
+  // there can be duplicate points
+  func isVisible(_ i:Int, _ j:Int) -> Bool {
+    // Note the vertices associated with these indices
+    let uv = [zoneIndices[(i + polygonCount) % polygonCount], zoneIndices[(j + polygonCount) % polygonCount]]
+    
+    nextIndex: for index in 0..<polygonCount {
+      // An edge
+      let f = [zoneIndices[index], zoneIndices[(index + 1) % polygonCount]]
+      
+      // Is i or j included in this edg
+      // Is the vertex at i or the vertex at j included in this edge?
+      if f.contains(uv[0]) || f.contains(uv[1]) { continue nextIndex }
+      
+      // If the polygon side [index, index + 1] intersects the side [i, j] the vertices
+      // are not inter-visible
+      return !edgeIntersectsEdge(firstEdge: uv, secondEdge: f)
+    }
+    
+    // The vertices are intervisible
+    return true
+  }
+  */
   
-//  //  isVisible:  Is point (i) visible to point (j) (or vice-versa)
-//  //
-//  //
-//  func isVisible(_ i:Int, _ j:Int) -> Bool {
-//    let ij = [(i + polygonCount) % polygonCount, (j + polygonCount) % polygonCount]
-//    for index in 0..<polygonCount {
-//      // An edge
-//      let e = [index, (index + 1) % polygonCount]
-//
-//      // Is i or j included in this edge?
-//      if !e.contains(ij[0]) && !e.contains(ij[1]) {
-//        // If the polygon side [index, index + 1] intersects the side [i, j] the vertices
-//        // are not inter-visible
-//        if edgeIntersectsEdge(firstEdge: ij, secondEdge: e) {
-//          return false
-//        }
-//      }
-//    }
-   
   //  isVisible:  Is point (i) visible to point (j) (or vice-versa)
   //
   // For weak simple polygons this will fail because
   // there can be duplicate points
   func isVisible(_ i:Int, _ j:Int) -> Bool {
-    let ij = [(i + polygonCount) % polygonCount, (j + polygonCount) % polygonCount]
-    nextIndex: for index in 0..<polygonCount {
+    // The vertices at these indices
+    let u = zoneIndices[(i + polygonCount) % polygonCount], v = zoneIndices[(j + polygonCount) % polygonCount]
+    
+    // Get each edge
+    for index in 0..<polygonCount {
       // An edge
-      let e = [index, (index + 1) % polygonCount]
-      
-      // Is i or j included in this edge?
+      let f = [zoneIndices[index], zoneIndices[(index + 1) % polygonCount]]
+
       // Is the vertex at i or the vertex at j included in this edge?
-      if !e.contains(ij[0]) && !e.contains(ij[1]) {
-        // Is a duplicate of i or j included in this edge?
-        if e.contains(where: {isDuplicate(i, $0)}) || e.contains(where: {isDuplicate(j, $0)}) {
-          // A duplicate point in a weakly simple polygon does not make a vertex invisible
-          continue nextIndex
-        }
-        
+      if !f.contains(u) && !f.contains(v) {
         // If the polygon side [index, index + 1] intersects the side [i, j] the vertices
         // are not inter-visible
-        if edgeIntersectsEdge(firstEdge: ij, secondEdge: e) {
+        if edgeIntersectsEdge(u, v, f[0], f[1]) {
           return false
         }
       }
@@ -852,29 +833,10 @@ extension Zone {
     // The vertices are intervisible
     return true
   }
-  
-  // isEqual
-  //
-  // is a vertex a duplicate? -- simplified version --
-  func isDuplicate(_ i:Int, _ j:Int) -> Bool {
-    let v = zoneIndices[(i + polygonCount) % polygonCount],
-        w = zoneIndices[(j + polygonCount) % polygonCount]
-    //if v == w { return true } // The identical point
-    return v == w
-//    // Equal but not identical
-//    return (Triangulation.coords[2 * v] == Triangulation.coords[2 * w]) &&
-//           (Triangulation.coords[2 * v + 1] == Triangulation.coords[2 * w + 1])
-  }
-  
+
   // Do two edges s = [a, b] and t = [c, d] intersect?
   //
-  func edgeIntersectsEdge(firstEdge s: Array<Int>, secondEdge t: Array<Int>) -> Bool {
-    // Obtain the four points a, b, c and d located on each side
-    let a = s[0]
-    let b = s[1]
-    let c = t[0]
-    let d = t[1]
-    
+  func edgeIntersectsEdge(_ a:Int, _ b:Int, _ c:Int, _ d:Int) -> Bool {
     // These form four triangles
     //                    d
     //                    |
@@ -883,45 +845,32 @@ extension Zone {
     //                    c
     //
     
-    
     // See if the edges potentially intersect
     // Compute the orientations
-    let abcOrient = orientation(a, b, c)
-    let abdOrient = orientation(a, b, d)
-    let cdaOrient = orientation(c, d, a)
-    let cdbOrient = orientation(c, d, b)
+    let ax = Triangulation.coords[2 * a], ay = Triangulation.coords[2 * a + 1]
+    let bx = Triangulation.coords[2 * b], by = Triangulation.coords[2 * b + 1]
+    let cx = Triangulation.coords[2 * c], cy = Triangulation.coords[2 * c + 1]
+    let dx = Triangulation.coords[2 * d], dy = Triangulation.coords[2 * d + 1]
     
-    // Assume the sides do not intersect
-    var intersect = false
+    let abcOrient = orientIfSure(ax, ay, bx, by, cx, cy)
+    let abdOrient = orientIfSure(ax, ay, bx, by, dx, dy)
+    let cdaOrient = orientIfSure(cx, cy, dx, dy, ax, ay)
+    let cdbOrient = orientIfSure(cx, cy, dx, dy, bx, by)
+    
     
     // If exactly one each of the pairs of triangles abc, abd & cda, cdb
     // are positive then the edges must intersect
     if ((abcOrient > 0) != (abdOrient > 0) && (cdaOrient > 0) != (cdbOrient > 0)) {
-      intersect = true
+      return true
     }
     
     // The edges intersect if any combination of three points are colinear
     // and the third point lies 'between' the other two points
-    // This never gets called?
-    if !intersect { // If intersection is known nothing to do
-      // More efficient to precompute modified labels
-      let p = zoneIndices[(a + polygonCount) % polygonCount]
-      let q = zoneIndices[(b + polygonCount) % polygonCount]
-      let r = zoneIndices[(c + polygonCount) % polygonCount]
-      let s = zoneIndices[(d + polygonCount) % polygonCount]
-      
-      // Just compute the intersectioq
-      intersect = (abcOrient == 0 && isBetween(first: p, second: q, middle: r)) ||
-        (abdOrient == 0 && isBetween(first: p, second: q, middle: s)) ||
-        (cdaOrient == 0 && isBetween(first: r, second: s, middle: p)) ||
-        (cdbOrient == 0 && isBetween(first: r, second: s, middle: q))
-    }
-    
-    // Return the intersection status
-    return intersect
+    return (abcOrient == 0 && isBetween(first: a, second: b, middle: c)) ||
+      (abdOrient == 0 && isBetween(first: a, second: b, middle: d)) ||
+      (cdaOrient == 0 && isBetween(first: c, second: d, middle: a)) ||
+      (cdbOrient == 0 && isBetween(first: c, second: d, middle: b))
   }
-
-  
     
 //
 //  // For screening input files
@@ -943,6 +892,43 @@ extension Zone {
 //    return true
 //  }
 } // End of zones
+
+// Is the point p inside a closed loop of points?
+func isInside(boundary indices:Array<Int>, size polygonCount:Int, query_x queryX:Double, query_y queryY:Double) -> Bool {
+  // Count all the times a horizontal ray
+  // heading to infinity from the query point
+  // crosses the hull
+  if polygonCount < 3 {
+    return false
+  }
+  
+  // Get each edge of the perimeter
+  var crossings = 0
+  for i in 0..<polygonCount {
+    // Each edge is bounded by a pair of points p, q
+    let j = (i + 1) % polygonCount
+    let py = Triangulation.coords[2 * indices[i] + 1] - queryY,
+        qy = Triangulation.coords[2 * indices[j] + 1] - queryY
+    
+    // When equal to zero need to include
+    // one boundary point (p) and exclude
+    // the other (q) otherwise
+    // crossings will be double-counted
+    if (py >= 0) != (qy > 0) {
+      let px = Triangulation.coords[2 * indices[i]] - queryX,
+          qx = Triangulation.coords[2 * indices[j]] - queryX
+      
+      // Sum area signs
+      let area = orientIfSure(px, py, qx, qy, 0, 0)
+      if area != 0 {
+        crossings += area > 0 ? 1 : -1
+      }
+    } // End of if both same sign
+  }
+  
+  // True if positive
+  return crossings > 0
+}
 
 // Process the input data
 // Can be either a zone file or a precomputed triangulation
