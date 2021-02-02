@@ -2284,8 +2284,7 @@ extension Triangulation {
     
     // The corresponding edge
     var g = halfEdges[d]
-
-    
+                
     // Now process each shell edge in turn (anti-clockwise order)
     for (j, e) in shellEdges.enumerated() {
       // Previous edge pair is (d, g)
