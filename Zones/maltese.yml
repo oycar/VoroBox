@@ -8,7 +8,7 @@ name: maltese
 
 # Default global properties
 properties: &globalProperties
-  randomDensity: 0
+  randomDensity: 100
   distinct: false
   showMe: 1
   
@@ -29,31 +29,21 @@ points: {
  r2 : &r2 [1.0, 0.0],
  r3 : &r3 [1.70710678118654757,  0.70710678118654757],
  a  : [-2, -2],
- b  : [0, -2],
  c  : [2, -2],
- d  : [2, 0],
  e  : [2, 2],
- f  : [0, 2],
- g  : [-2, 2],
- h  : [-2, 0]
+ g  : [-2, 2]
 }
 
 zones:
   # Define an inverted Maltese cross
   # Standard method
   - boundary: [a, c, e, g]
-    # a, d1, o, l3, l2, l1, o, u3, u2, u1, o, r3, r2, r1, o, d3, d2, d1]
     holes: [[d3, d2, d1, o, l3, l2, l1, o, u3, u2, u1, o, r3, r2, r1, o]]
-      
-
 
   # Define an offset Maltese cross
-  # because we are applying an offset use the anchors and the geojson style
-  - polygon: [[*o, *u1, *u2, *u3]]
+  # because we are applying an offset use the multipolygon style
+  # This has four distinct regions
+  - multipolygon: [[[*o, *u1, *u2, *u3]], [[*o, *l1, *l2, *l3]],
+  [[*o, *d1, *d2, *d3]], [[*o, *r1, *r2, *r3]]]
     origin: [4, 0]
-  - polygon: [[*o, *l1, *l2, *l3]]
-    origin: [4, 0]
-  - polygon: [[*o, *d1, *d2, *d3]]
-    origin: [4, 0]
-  - polygon: [[*o, *r1, *r2, *r3]]
-    origin: [4, 0]
+

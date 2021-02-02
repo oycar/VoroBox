@@ -2150,8 +2150,7 @@ extension Triangulation {
     //
     // Two possibilities; h is on the loop (a convex corner)
     //                    h is not on the loop (reflex or colinear)
-    let convexCorner = (stopEdge <= BoundaryEdge)
-    if convexCorner {
+    if stopEdge <= BoundaryEdge {
       shellEdges.append(startEdge)
     }
     
@@ -2244,8 +2243,8 @@ extension Triangulation {
     //   g  .            . i           g.\           /.i
     //       . ...e.... .                .\         /.
     //       .*––––––––*.           ==>   .*       *.
-    //       .|    h   |.                 .|       |.
-    //      p.|        |.n               p.|       |.n
+    //       .|    h   |.                 .|       |.          n was Triangulation.hullNext[e]
+    //      p.|        |.n               p.|       |.n         p was Triangulation.hullPrev[e]
     //
     //
     //        ....
@@ -2261,11 +2260,31 @@ extension Triangulation {
     //   3) F*I
     //   4) F*B
     //   5) I*I (First edge only)
-    //
+    //   6) I*B (First edge only)
     
+
+    
+
+    
+    //  Type 6 can be removed by rotating the shell by one
+    //  Type 6 can only occur if stopEdge was a BoundaryEdge
+    //  Rotating the shell will put B as the last edge
+    //  So possible initial pair will be
+    //   i) B*B (== 1)
+    //  ii) B*I (== 2)
+    var bLast = false
     // Initialize
     // Get the previous edge (will be type B or I)
-    var d = shellEdges.last!, g = halfEdges[d]
+    var d = shellEdges.last!
+    if halfEdges[shellEdges.first!] <= BoundaryEdge {
+      // Put this B at the end (so I*B is impossible)
+      d = shellEdges.removeFirst()
+      shellEdges.append(d)
+    }
+    
+    // The corresponding edge
+    var g = halfEdges[d]
+
     
     // Now process each shell edge in turn (anti-clockwise order)
     for (j, e) in shellEdges.enumerated() {
@@ -2285,9 +2304,13 @@ extension Triangulation {
           Triangulation.hullNext[h] = n
           Triangulation.hullPrev[n] = h
           
-          // Can delete d
-          Triangulation.hullNext[d] = nil
-          Triangulation.hullPrev[d] = nil
+          // Can delete d if not first edge
+          if j > 0 {
+            Triangulation.hullNext[d] = nil
+            Triangulation.hullPrev[d] = nil
+          } else {
+            bLast = true
+          }
         } else if d <= BoundaryEdge || 0 == j {
           // Type F*I or I*I
           Triangulation.hullNext[h] = g
@@ -2310,14 +2333,18 @@ extension Triangulation {
           Triangulation.hullPrev[g] = p
           Triangulation.hullNext[p] = g
         } else if g <= BoundaryEdge {
+          // Type B*B
           if 0 != j {
-            // Type B*B          
+            // Nothing to do for B*B
             // Can delete d (unless first call)
             Triangulation.hullNext[d] = nil
             Triangulation.hullPrev[d] = nil
+          } else {
+            bLast = true
           }
         } else {
-          // Nothing to do for B*B; I*B should be impossble
+          // This is I*B
+          // Not B*B or F*B
           throw triangulationError.initError("Found unexpected edge pair status")
         }
 
@@ -2330,7 +2357,7 @@ extension Triangulation {
     }
     
     // Delete boundary
-    if convexCorner {
+    if bLast {
       d = shellEdges.last!
       Triangulation.hullNext[d] = nil
       Triangulation.hullPrev[d] = nil
@@ -3552,7 +3579,7 @@ extension Triangulation {
     let i = showCount
     
     // Debugging - More information
-    if (showMe > 100)  {
+    if (showMe > 2)  {
       // And a vtk file - voronoi
       let folder = try! Folder(path: OutputFolder)
       let filename = "edges_" + s + String(format:"%04d.vtk", i)

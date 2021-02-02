@@ -63,6 +63,11 @@ struct Zone: Codable {
   // Labelled Points
   static var labelledPoints = Dictionary<String, Int>()
   
+  // Global properties
+  static var origin:Array<Double> = [0, 0]
+  static var scale:Double = 1
+  static var order:String = "anticlockwise"
+
   // The optional instance name
   var name: String?
 
@@ -92,6 +97,8 @@ struct Zone: Codable {
 extension Zone {
   // Read in a zone defined in a data file
   init(usingData stored: StoredZones.Zone) throws {
+    var inputZones = Array<Zone>()
+    
     // Name this zone
     name = stored.name
     
@@ -131,37 +138,25 @@ extension Zone {
     // Either as labelled points in a list of strings
     // Need to find the points that correspond to these
     // Only  the first array is needed to construct the boundary
+    //
+    // This might be a multi-part zone
+    
     if var list = stored.boundary {
       func add(to indices:inout Array<Int>, fromLabels list:Array<String>) {
-        // Add the indices
         // Add the indices
         for label in list {
           let i = Zone.labelledPoints[label]!
           indices.append(i)
         }
-        
-//        for label in list {
-//          let i = Zone.labelledPoints[label]!
-//
-//          // Each index can only occur once in each ring
-//          if indices.contains(i) {
-//            // Duplicate this point
-//            let p = [Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1]]
-//
-//            // A new point if none found - input points are treated as members of a triangulation
-//            Triangulation.coords.append(contentsOf: p)
-//            Triangulation.code.append(NoZoneCode)
-//
-//            indices.append(Triangulation.pointCount)
-//            Triangulation.pointCount += 1
-//          } else {
-//            indices.append(i)
-//          }
-//        }
       }
       
+      // Was the list closed
+      // This allows the loop [a, b, c, ..., n]
+      // to be given as [a, b, c, ..., n, a]
+      if list.first! == list.last! { list.removeLast() }
+      
       // Check ordering
-      if stored.order == "clockwise" { list.reverse() }
+      if stored.order != "anticlockwise" || Zone.order == "clockwise" { list.reverse() }
       
       // Add the indices
       add(to: &zoneIndices, fromLabels: list)
@@ -171,8 +166,11 @@ extension Zone {
         for h in 0..<holes.count {
           var hole = holes[h]
           
-          // Check ordering
-          if stored.order == "clockwise" { hole.reverse() }
+          // Is this list closed?
+          if hole.first! == hole.last! { hole.removeLast() }
+
+          // Check ordering||
+          if stored.order != "anticlockwise" || Zone.order == "clockwise" { hole.reverse() }
           
           // Add the indices in this loop (which can be duplicated)
           var indices = Array<Int>()
@@ -185,74 +183,116 @@ extension Zone {
       
       // The polygon order
       polygonCount = zoneIndices.count
+      
+      // Save this inputZone
+      inputZones.append(self)
     } else if let polygons = stored.polygon {
-      // Or as explicit polygon of [x,y] points
-      var polygon = polygons.first!
-      // Check ordering
-      if stored.order == "clockwise" { polygon.reverse() }
-      
-      // In this case
-      // Zones can be referred to a specific origin
-      var origin  = Array<Double>([0, 0])
-      if let o = stored.origin {
-        origin = o
+      // Define a zone using a polygon
+      inputZones.append(Zone(copy: self, using: polygons, data: stored))
+    } else if let multipolygons = stored.multipolygon {
+      // This is quite straightforward now
+      for polygons in multipolygons {
+        inputZones.append(Zone(copy: self, using: polygons, data: stored))
       }
       
-      // And a scale factor can be applied
-      var scale = 1.0
-      if let s = stored.scale {
-        scale = s
-      }
-      
+    }
+    
+    for i in 0..<inputZones.count {
+      var z = inputZones[i]
+      if !z.zoneIndices.isEmpty {
+        // Now need to make a list of convex zones
+        try! z.clipZone()
+      } // Clipped the zone into convex polygons
+    
+      // The final convex zone is simply z
+      convexZones.append(contentsOf: z.convexZones)
+      convexZones.append(z)
+    }
+  } // init
+ 
+  // This copies a zone but replaces the boundary
+  init(copy zone: Zone, using polygons:Array<Array<Array<Double>>>,
+       data stored: StoredZones.Zone) {
+    func add(to indices:inout Array<Int>, fromPoints list:Array<Array<Double>>) {
+      // Add the indices
+
       // The points are mapped to vertices
-      roundPolygon: for k in 0..<polygon.count {
-        var p = polygon[k]
+      roundList: for k in 0..<list.count {
+        var p = list[k]
         for j in 0...1 {
           p[j] = origin[j] + scale * p[j]
         }
         
-        //// Can reuse points from earlier rings
-        
-        //for i in 0..<pointCount {
+        // Can reuse vertices
         for i in 0..<Triangulation.pointCount {
-
           let x = dist(Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1], p[0], p[1])
-
+          
           // Is this a matching point?
           if x < squaredThreshold {
-            zoneIndices.append(i)
-            continue roundPolygon
+            indices.append(i)
+            continue roundList
           }
         }
-                
+        
         // A new point if none found - input points are treated as members of a triangulation
         Triangulation.coords.append(contentsOf: p)
         
         // Use the zone properties
         Triangulation.code.append(NoZoneCode)
         
-        zoneIndices.append(Triangulation.pointCount)
+        indices.append(Triangulation.pointCount)
         Triangulation.pointCount += 1
-      }
-      polygonCount = zoneIndices.count
-
+      } // End of each list
     }
     
-    if !zoneIndices.isEmpty {
+    // Or as explicit polygon of [x,y] points
+    var polygon = polygons.first!
     
-      // Now need to make a list of convex zones
-      do {
-        try clipZone()
+    // Add a zone defined by a polygon
+    name = zone.name
+    code = zone.code
+    properties = zone.properties
+    
+    // Was the list closed (geojson style?) 
+    if polygon.first! == polygon.last! { polygon.removeLast() }
 
-      } catch {
-        fatalError("Couldn't triangulate \(self)\n\(error)")
-      }
-    } // Clipped the zone into convex polygons
+    // Check ordering
+    if stored.order != "anticlockwise" || Zone.order == "clockwise" { polygon.reverse() }
     
-    // The final convex zone is simply self
-    convexZones.append(self)
-  } // init
- 
+    // In this case
+    // Zones can be referred to a specific origin
+    let origin  = stored.origin ?? Zone.origin
+    
+    // And a scale factor can be applied
+    let scale = stored.scale ?? Zone.scale
+
+    // Add the indices
+    add(to: &zoneIndices, fromPoints: polygon)
+    
+    // Read the holes
+    for h in 0..<polygons.count {
+      if h > 0 {
+        var hole = polygons[h]
+
+        // Is this list closed?
+        if hole.first! == hole.last! { hole.removeLast() }
+
+        // Check ordering
+        if stored.order != "anticlockwise" || Zone.order == "clockwise" { hole.reverse() }
+
+        // Add the indices in this loop (which can be duplicated)
+        var indices = Array<Int>()
+        add(to: &indices, fromPoints: hole)
+
+        // Save this
+        holeIndices.append(indices)
+      } // End of each hole
+    }
+    
+    // All done
+    polygonCount = zoneIndices.count
+  }
+  
   // Some specialized inits
   init(clip zone: Zone, ear i:Int, order n:Int, label optionalName:String? = nil) {
     // This handles the case of convex zones
@@ -485,8 +525,9 @@ extension Zone {
       var convexZone:Zone? = nil
       
       // This can be improved
-      untilConvex: while (holeIndices.isEmpty && polygonCount > 3 && ears.count < polygonCount) ||
-                        (!holeIndices.isEmpty && polygonCount > 3) {
+      //untilConvex: while (holeIndices.isEmpty && polygonCount > 3 && ears.count < polygonCount) ||
+        //                (!holeIndices.isEmpty && polygonCount > 3) {
+      untilConvex: while polygonCount > 3 && (!holeIndices.isEmpty || ears.count < polygonCount) {
 
         // For testing turn off reverible clip
         var reversibleClip = true
@@ -630,50 +671,52 @@ extension Zone {
     throw zoneError.initError("Zone \(Zone.name) can't find matching vertices to join two zones")
   }
   
-//  //
-//  // ears :  Compute the ear status of all points
-//  func listEars() throws -> Array<Int> {
-//    // Initialize the ears
-//    // There must always be  least two
-//    var ears = [Int]()
-//
-//    // Get the status of the first two points
-//    // A point is an ear (and could be clipped) if the
-//    // line from point i-1 to i+1 is a diagonal of the polygon
-//    for i in 0...1 {
-//      if isDiagonal(first:i - 1, second:i + 1) {
-//        ears.append(i)
-//      }
-//    }
-//
-//    // Quadrilaterals have a useful symmetry which means no more
-//    // diagonals need to be computed
-//    if polygonCount > 4 {
-//      // Get the remaining points
-//      for i in 2..<polygonCount {
-//        if isDiagonal(first: i - 1, second: i + 1) {
-//          ears.append(i)
-//        }
-//      }
-//    } else {
-//      // A quadrilateral is a special case due to symmetry
-//      // Just copy the first two entries (saves two calls to isDiagonal)
-//      for i in 2...3 {
-//        if ears.contains(i - 2) {
-//          ears.append(i)
-//        }
-//      }
-//    }
-//
-//    // Scrambled polygon
-//    if ears.count < 2 {
-//      throw zoneError.initError("Zone \(Zone.name) can't find two ears in the polygon \(zoneIndices)")
-//    }
-//
-//    // Return the ear list
-//    return ears
-//  }
-//
+  //
+  /*
+  // listEars :  Compute the ear status of all points
+  func listEars() throws -> Array<Int> {
+    // Initialize the ears
+    // There must always be  least two
+    var ears = [Int]()
+
+    // Get the status of the first two points
+    // A point is an ear (and could be clipped) if the
+    // line from point i-1 to i+1 is a diagonal of the polygon
+    for i in 0...1 {
+      if isDiagonal(first:i - 1, second:i + 1) {
+        ears.append(i)
+      }
+    }
+
+    // Quadrilaterals have a useful symmetry which means no more
+    // diagonals need to be computed
+    if polygonCount > 4 {
+      // Get the remaining points
+      for i in 2..<polygonCount {
+        if isDiagonal(first: i - 1, second: i + 1) {
+          ears.append(i)
+        }
+      }
+    } else {
+      // A quadrilateral is a special case due to symmetry
+      // Just copy the first two entries (saves two calls to isDiagonal)
+      for i in 2...3 {
+        if ears.contains(i - 2) {
+          ears.append(i)
+        }
+      }
+    }
+
+    // Scrambled polygon
+    if ears.count < 2 {
+      throw zoneError.initError("Zone \(Zone.name) can't find two ears in the polygon \(zoneIndices)")
+    }
+
+    // Return the ear list
+    return ears
+  }
+*/
+  
   //
   // ears :  Compute the ear status of all points
   func listEars() throws -> Array<Int> {
@@ -683,7 +726,7 @@ extension Zone {
     func printPoint(_ i: Int) -> String {
       let j = zoneIndices[(i + polygonCount) % polygonCount]
       return "i \(i) => [\(Triangulation.coords[2 * j]), \(Triangulation.coords[2 * j + 1])]"
-    }
+     }
     
     // Get the status of the first two points
     // A point is an ear (and could be clipped) if the
@@ -729,6 +772,7 @@ extension Zone {
     // Return the ear list
     return ears
   }
+
   
   // Returns the orientation of a triangle of polygon vertices i, j, k
   // Convex vertices will be positive
@@ -779,33 +823,6 @@ extension Zone {
     // The diagonal is within the cone if the score is less than two
     return score < 2
   }
- 
-  /*
-  //  isVisible:  Is vertex at (i) visible to vertex at (j) (or vice-versa)
-  //
-  // For weak simple polygons this will fail because
-  // there can be duplicate points
-  func isVisible(_ i:Int, _ j:Int) -> Bool {
-    // Note the vertices associated with these indices
-    let uv = [zoneIndices[(i + polygonCount) % polygonCount], zoneIndices[(j + polygonCount) % polygonCount]]
-    
-    nextIndex: for index in 0..<polygonCount {
-      // An edge
-      let f = [zoneIndices[index], zoneIndices[(index + 1) % polygonCount]]
-      
-      // Is i or j included in this edg
-      // Is the vertex at i or the vertex at j included in this edge?
-      if f.contains(uv[0]) || f.contains(uv[1]) { continue nextIndex }
-      
-      // If the polygon side [index, index + 1] intersects the side [i, j] the vertices
-      // are not inter-visible
-      return !edgeIntersectsEdge(firstEdge: uv, secondEdge: f)
-    }
-    
-    // The vertices are intervisible
-    return true
-  }
-  */
   
   //  isVisible:  Is point (i) visible to point (j) (or vice-versa)
   //
@@ -871,26 +888,6 @@ extension Zone {
       (cdaOrient == 0 && isBetween(first: c, second: d, middle: a)) ||
       (cdbOrient == 0 && isBetween(first: c, second: d, middle: b))
   }
-    
-//
-//  // For screening input files
-//  func checkPolygon() -> Bool {
-//    // Get each edge index i
-//    for i in 0..<zoneIndices.count-1 {
-//      let jmax = i == 0 ? zoneIndices.count - 1 : zoneIndices.count
-//      for j in i+2..<jmax {
-//        let a = [i, (i + polygonCount) % polygonCount]
-//        let b = [j, (j + polygonCount) % polygonCount]
-//
-//        // Do the two edges i & j intersect?
-//        if edgeIntersectsEdge(firstEdge: a, secondEdge: b) {
-//          // Yes
-//          return false
-//        }
-//      }
-//    }
-//    return true
-//  }
 } // End of zones
 
 // Is the point p inside a closed loop of points?
@@ -959,6 +956,11 @@ func triangulateZones(using storedData:StoredZones) throws {
   } else {
     Zone.globalProperties = Properties(with: nil, 0, true)
   }
+  
+  //
+  Zone.scale = storedData.scale ?? Zone.scale
+  Zone.origin = storedData.origin ?? Zone.origin
+  Zone.order = storedData.order ?? Zone.order
 
   // Need to establish a bounding box
   // We can do this here because
