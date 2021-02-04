@@ -469,11 +469,8 @@ extension Zone {
         // Get each hole
         for (h, hole) in holeIndices.enumerated() {
           // Get each point in each hole
-          print("Hole => \(h)")
           for (index, p) in hole.enumerated() {
             // This is vertex p
-            print("\tVertex => \(p)")
-            
             // Is this point inside the triangle [abc]?
             let px = Triangulation.coords[2 * p], py = Triangulation.coords[2 * p + 1]
 
@@ -541,9 +538,6 @@ extension Zone {
           // Save the conflicting loop and the relevant boundary ear
           conflictingLoop = c
           conflictsWith = i
-          
-          print("\tEar \(i)")
-          print("\t\tConflicts => \(conflictingLoop)")
           break untilConvex
         } else {
           conflictingLoop = []
@@ -672,7 +666,6 @@ extension Zone {
   }
   
   //
-  /*
   // listEars :  Compute the ear status of all points
   func listEars() throws -> Array<Int> {
     // Initialize the ears
@@ -715,64 +708,6 @@ extension Zone {
     // Return the ear list
     return ears
   }
-*/
-  
-  //
-  // ears :  Compute the ear status of all points
-  func listEars() throws -> Array<Int> {
-    // Initialize the ears
-    // There must always be  least two
-    var ears = [Int]()
-    func printPoint(_ i: Int) -> String {
-      let j = zoneIndices[(i + polygonCount) % polygonCount]
-      return "i \(i) => [\(Triangulation.coords[2 * j]), \(Triangulation.coords[2 * j + 1])]"
-     }
-    
-    // Get the status of the first two points
-    // A point is an ear (and could be clipped) if the
-    // line from point i-1 to i+1 is a diagonal of the polygon
-    for i in 0...1 {
-      print(printPoint(i))
-      if isDiagonal(first:i - 1, second:i + 1) {
-        ears.append(i)
-        print("Ear \(i)")
-        print("\t\(printPoint(i - 1))")
-        print("\t\(printPoint(i + 1))")
-      }
-    }
-    
-    // Quadrilaterals have a useful symmetry which means no more
-    // diagonals need to be computed
-    if polygonCount > 4 {
-      // Get the remaining points
-      for i in 2..<polygonCount {
-        print(printPoint(i))
-        if isDiagonal(first: i - 1, second: i + 1) {
-          ears.append(i)
-          print("Ear \(i)")
-          print("\t\(printPoint(i - 1))")
-          print("\t\(printPoint(i + 1))")
-        }
-      }
-    } else {
-      // A quadrilateral is a special case due to symmetry
-      // Just copy the first two entries (saves two calls to isDiagonal)
-      for i in 2...3 {
-        if ears.contains(i - 2) {
-          ears.append(i)
-        }
-      }
-    }
-    
-    // Scrambled polygon
-    if ears.count < 2 {
-      throw zoneError.initError("Zone \(Zone.name) can't find two ears in the polygon \(zoneIndices)")
-    }
-    
-    // Return the ear list
-    return ears
-  }
-
   
   // Returns the orientation of a triangle of polygon vertices i, j, k
   // Convex vertices will be positive
@@ -1075,11 +1010,6 @@ func triangulateZones(using storedData:StoredZones) throws {
 
       // Join convexZones together
       try Triangulation.triangulation.join(loop: convexHullNext)
-      
-      if showMe != 0 {
-        print("Joined convex zone \(z)")
-        Triangulation.triangulation.showVoronoi(label: "iz_", type: "Voronoi")
-      }
     } catch {
       fatalError("Couldn't triangulate \(z)\n\(error)")
     }

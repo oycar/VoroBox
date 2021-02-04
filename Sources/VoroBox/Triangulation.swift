@@ -72,8 +72,8 @@ import Files
 internal let Epsilon:Double = pow(2.0, -53)
 // Shewchuk error bounds
 let squaredThreshold:Double = (2.0 +        Epsilon) * Epsilon
-let circleThreshold:Double = (10.0 + 96.0 * Epsilon) * Epsilon
-internal let orientThreshold:Double = circleThreshold
+internal let circleThreshold:Double = (10.0 + 96.0 * Epsilon) * Epsilon
+internal let orientThreshold:Double =  (3.0 + 16.0 * Epsilon) * Epsilon
 
 internal let ProjectFolder = ProcessInfo.processInfo.environment["HOME"]!  + "/CloudStation/Projects/VoroBox"
 internal let ZoneFolder = ProjectFolder + "/Zones"
@@ -575,7 +575,7 @@ extension Triangulation {
   }
 
   // Hull functions
-  mutating func join(loop convexHullNext:Dictionary<Int, Int>, rejoin forceJoin:Bool = false) throws {
+  mutating func join(loop convexHullNext:Dictionary<Int, Int>) throws {
     // Join convexZone hulls together
     // Strip empty values from the hull
     var convexNext = Dictionary<Int, Int>()
@@ -683,7 +683,7 @@ extension Triangulation {
       // These are any even codes (Delaunay conforming)
       // Or equal odd codes (Voronoi conforming)
       // Or if forceJoin is already set
-      if eCode == bCode || (0 == eCode % 2 && 0 == bCode % 2) || forceJoin {
+      if eCode == bCode || (0 == eCode % 2 && 0 == bCode % 2) {
         p = vertices[e]
         q = vertices[b]
         
@@ -1378,9 +1378,10 @@ extension Triangulation {
         
         // Now we can update the mesh
         var a2 = a0 + (a + 2) % 3
-        if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) { updateBoundary() }
+        if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) {
+          updateBoundary()
+        }
         
-        if showMe > 1 { showLoop(label: "Flipped Vertex => \(pº)", f) }
         showVoronoi(label: "fo_", type: "Delaunay")
 
         // Add qº near the outgoing edge
@@ -1400,7 +1401,6 @@ extension Triangulation {
           if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) { updateBoundary() }
 
           showVoronoi(label: "fo_", type: "Delaunay")
-          if showMe > 1 { showLoop(label: "Flipped Vertex => \(qº)", f) }
         }
         
         // Anticlockwise search for an edge connected to the hub h
@@ -1419,8 +1419,13 @@ extension Triangulation {
         
         // Record an edge linked to the hub vertex we wish to remove
         // Edges are not stable in the long term
+        if vertices[s2] != list[hIndex] {
+          throw triangulationError.initError("Cannot find edge connected to hub \(list[hIndex])")
+        }
+        
+        // The hub edge
         let hubEdge = s2
-                
+
         // Debug
         showVoronoi(label: "fo_", type: "Delaunay")
         
@@ -1440,8 +1445,6 @@ extension Triangulation {
         // remove this vertex
         try! removeVertex(from: hubEdge)
         
-        if showMe > 1 { showLoop(label: "Removed Vertex => \(list[hIndex])", a) }
-
         // Get next edge
         e = a
         repeat {
@@ -1467,25 +1470,6 @@ extension Triangulation {
     }
     try! addImages()
   }
- 
-  func showLoop(label title:String, _ start:Int) {
-    print("# \(title)")
-    var vString = ""
-    
-    var x = start
-    print("points: {")
-    repeat {
-      let v = vertices[x]
-      vString += " v_\(v),"
-      print("# Vertex => \(v) Edge => \(x)")
-      print("v_\(v) : [\(Triangulation.coords[2 * v]), \(Triangulation.coords[2 * v + 1])], ")
-      x = Triangulation.hullNext[x]!
-    } while x != start
-    print("}")
-    print("zones:")
-    print("  - list: [\(vString)]")
-  }
-  
   
   // Flip around a vertex
   mutating func flipVertex(onEdge e:Int, trackBoundaries boundaryList:inout Array<Int>) -> Bool {
@@ -2220,7 +2204,7 @@ extension Triangulation {
       // Stop here if edge wasn't disconnected (it will have been)
     } while a2 != stopEdge
 
-    if showMe > 2 {
+    if showMe > 1 {
       print("Remove Vertex => \(vertices[startEdge])")
       print("\tShell Edges    => \(shellEdges)")
       print("\tShell Vertices => \(shellVertices)")
@@ -2261,12 +2245,7 @@ extension Triangulation {
     //   4) F*B
     //   5) I*I (First edge only)
     //   6) I*B (First edge only)
-    
-
-    
-
-    
-    //  Type 6 can be removed by rotating the shell by one
+    //
     //  Type 6 can only occur if stopEdge was a BoundaryEdge
     //  Rotating the shell will put B as the last edge
     //  So possible initial pair will be
@@ -2362,10 +2341,8 @@ extension Triangulation {
       Triangulation.hullPrev[d] = nil
     }
     
-    if showMe > 2 {
-      print("Removed Vertex \(vertices[startEdge])")
-      //showVoronoi(label: "rv_", type:"Delaunay")
-    }
+    // Logging
+    showVoronoi(label: "rv_", type:"Delaunay")
     
     // Now use the shell of vertices to define a zone - use full machinery to reattach
     // At the moment this doesn't add any extra points but does
@@ -2379,17 +2356,16 @@ extension Triangulation {
 
     // Next triangulate this zone
     for z in localZone.convexZones {
-      // Tracl this
+      // Track this
       
       // Add the zone to the triangulation
       let convexHullNext = try! addVertices(indices: z.zoneIndices, boundary: z.code)
       
       // Join convexZones together
-      try! join(loop: convexHullNext, rejoin: true)
-      
-      if showMe > 2 {
-        showVoronoi(label: "jz_", type: "Voronoi")
-      }
+      //
+      try! join(loop: convexHullNext)
+
+      showVoronoi(label: "jz_", type: "Voronoi")
     } // End of each convex zone
   }
   
@@ -3446,6 +3422,74 @@ extension Triangulation {
     return vtkString
   }
   
+  // A single zone
+  func showShell(label title:String, _ shell:Array<Int>, _ vertex:Int) {
+    // Logging
+    
+    // And a vtk file - edges
+    let folder = try! Folder(path: OutputFolder)
+    let filename = "edges_" + title + String(format:"%04d.vtk", vertex)
+    let file = try! folder.createFile(named: filename)
+
+  
+    // Draw a single zone
+    var vtkString = "# vtk DataFile Version 2.0\n"
+    vtkString += "Voronoi Diagram \(title)\n"
+    vtkString += "\nASCII\nDATASET UNSTRUCTURED_GRID\n"
+  
+    // The points are the shell
+    vtkString +=  String(format: "\nPOINTS %04d double", shell.count)
+    
+    // Average point for empty centres
+    for v in shell {
+      let p = [Triangulation.coords[2 * v], Triangulation.coords[2 * v + 1]]
+      vtkString += String(format: "\n%.7f %.7f 0", p[0], p[1])
+    }
+    
+    // These are going to be filled cells - so we need a complete polygon
+    vtkString += String(format: "\nCELLS %04d %04d", shell.count, 3 * shell.count)
+    for i in 0..<shell.count {
+      vtkString += "\n2 \(i) \((i+1) % shell.count)"
+    }
+    
+    // the cell types (edges)
+    vtkString += String(format: "\nCELL_TYPES %04d", shell.count)
+    for _ in 0..<shell.count {
+      vtkString += String(format: "\n3")
+    }
+    
+    // point data
+    vtkString += String(format: "\nPOINT_DATA %04d", shell.count)
+    
+    vtkString += "\nSCALARS edge int 1"
+    vtkString += "\nLOOKUP_TABLE default"
+    for v in shell {
+      vtkString += "\n\(v)"
+    }
+    
+    try! file.write(vtkString)
+  }
+  
+  
+  
+  
+  func showLoop(label title:String, _ start:Int) {
+    print("# \(title)")
+    var vString = ""
+    
+    var x = start
+    print("points: {")
+    repeat {
+      let v = vertices[x]
+      vString += " v_\(v),"
+      print("# Vertex => \(v) Edge => \(x)")
+      print("v_\(v) : [\(Triangulation.coords[2 * v]), \(Triangulation.coords[2 * v + 1])], ")
+      x = Triangulation.hullNext[x]!
+    } while x != start
+    print("}")
+    print("zones:")
+    print("  - list: [\(vString)]")
+  }
 
   // Create a yaml formatted zone file
   func toZone() -> String {
@@ -3573,12 +3617,12 @@ extension Triangulation {
   }
 
   // Logging
-  internal func showVoronoi(label s:String, type flag: String = "Voronoi") {
+  internal func showVoronoi(label s:String, type flag: String = "Voronoi", force show: Bool = false) {
     showCount += 1
     let i = showCount
     
     // Debugging - More information
-    if (showMe > 2)  {
+    if show || showMe > 2  {
       // And a vtk file - voronoi
       let folder = try! Folder(path: OutputFolder)
       let filename = "edges_" + s + String(format:"%04d.vtk", i)
