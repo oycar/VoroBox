@@ -26,6 +26,7 @@ struct StoredZones : Codable {
   var zones: [Zone]
   var points: Dictionary<String, Array<Double>>?
   var coordinates: Array<Array<Double>>?
+  var arcs: Array<Array<Array<Double>>>?
 
   var name: String
   var conformingTo:String?
@@ -44,21 +45,18 @@ struct StoredZones : Codable {
 
     var origin: Array<Double>?
     var scale: Double?
-    var order: String? = "anticlockwise"
     
     // Standard description
     var boundary:Array<String>?
     var holes:Array<Array<String>>?
 
-    // Alternative geojson-like description
-    var polygon:Array<Array<Array<Double>>>?
-    var multipolygon:Array<Array<Array<Array<Double>>>>?
-
+    // Alternative topojson-like description
+    var polygon:Array<Array<Int>>?
+    var multipolygon:Array<Array<Array<Int>>>?
     // Properties associated with the zone
     var properties: Properties?
   }
   
-
   
   struct Properties: Codable {
     // Zone properties

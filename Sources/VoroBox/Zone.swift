@@ -21,6 +21,9 @@
 //
 import Foundation
 
+// Zone winding
+internal var ClockWise = false
+
 // Properties
 struct Properties: Codable {
   // Zone properties
@@ -60,13 +63,18 @@ struct Zone: Codable {
   // Iteration
   static var iteration:Int = 0
   
-  // Labelled Points
+  // Labelled Points (native way of defining points)
   static var labelledPoints = Dictionary<String, Int>()
+  
+  // Arc vertices (when using topojson style zone files)
+  static var arcVertices = Array<Array<Int>>()
   
   // Global properties
   static var origin:Array<Double> = [0, 0]
   static var scale:Double = 1
-  static var order:String = "anticlockwise"
+  
+  // Instance properties
+  var clockwise:Bool = false
 
   // The optional instance name
   var name: String?
@@ -96,7 +104,7 @@ struct Zone: Codable {
 // The actual zone structure ...
 extension Zone {
   // Read in a zone defined in a data file
-  init(usingData stored: StoredZones.Zone) throws {
+  init(usingData stored: StoredZones.Zone, with arcs:Array<Array<Array<Double>>>?) throws {
     var inputZones = Array<Zone>()
     
     // Name this zone
@@ -130,10 +138,16 @@ extension Zone {
     // Set code - when even the zone is Voronoi conforming (the default)
     Zone.zoneID += 1
     
+    // The zones' (may) have a list of arcs associated with them
+    if let a = arcs {
+      // Make space for the arcs
+      Zone.arcVertices = Array(repeating: [], count: a.count)
+    }
+    
     // Initially we are reading the stored data, which can define
     // a reflex polygon - so we need to create a collection
     // of convex zones
-    
+        
     // We are given the co-ordinates
     // Either as labelled points in a list of strings
     // Need to find the points that correspond to these
@@ -155,8 +169,8 @@ extension Zone {
       // to be given as [a, b, c, ..., n, a]
       if list.first! == list.last! { list.removeLast() }
       
-      // Check ordering
-      if stored.order != "anticlockwise" || Zone.order == "clockwise" { list.reverse() }
+      // Check ordering - this is the global setting
+      if ClockWise { list.reverse() }
       
       // Add the indices
       add(to: &zoneIndices, fromLabels: list)
@@ -170,7 +184,7 @@ extension Zone {
           if hole.first! == hole.last! { hole.removeLast() }
 
           // Check ordering||
-          if stored.order != "anticlockwise" || Zone.order == "clockwise" { hole.reverse() }
+          if ClockWise { hole.reverse() }
           
           // Add the indices in this loop (which can be duplicated)
           var indices = Array<Int>()
@@ -187,16 +201,21 @@ extension Zone {
       // Save this inputZone
       inputZones.append(self)
     } else if let polygons = stored.polygon {
+      // Make polygons arrays of vertices
+      // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
+      
       // Define a zone using a polygon
-      inputZones.append(Zone(copy: self, using: polygons, data: stored))
+      inputZones.append(Zone(copy: self, using: polygons, and: arcs!, data: stored))
     } else if let multipolygons = stored.multipolygon {
       // This is quite straightforward now
       for polygons in multipolygons {
-        inputZones.append(Zone(copy: self, using: polygons, data: stored))
+        inputZones.append(Zone(copy: self, using: polygons, and: arcs!, data: stored))
       }
-      
     }
     
+    if showMe > 0 {
+      print("Processing \(inputZones.count) zones")
+    }
     for i in 0..<inputZones.count {
       var z = inputZones[i]
       if !z.zoneIndices.isEmpty {
@@ -207,57 +226,104 @@ extension Zone {
       // The final convex zone is simply z
       convexZones.append(contentsOf: z.convexZones)
       convexZones.append(z)
+      if showMe > 0 {
+        print("Added \(convexZones.count) convex zones")
+      }
     }
   } // init
  
-  // This copies a zone but replaces the boundary
-  init(copy zone: Zone, using polygons:Array<Array<Array<Double>>>,
+  // This copies a zone but replaces the boundary with the specified arcs
+  init(copy zone: Zone, using polygons:Array<Array<Int>>,
+       and arcs:Array<Array<Array<Double>>>,
        data stored: StoredZones.Zone) {
-    func add(to indices:inout Array<Int>, fromPoints list:Array<Array<Double>>) {
-      // Add the indices
-
-      // The points are mapped to vertices
-      roundList: for k in 0..<list.count {
-        var p = list[k]
-        for j in 0...1 {
-          p[j] = origin[j] + scale * p[j]
-        }
+    func polyFrom(arcs list:Array<Int>) -> Array<Int> {
+      // Passed in an array listing the arcs to be used
+      // This is used to (i) construct the polygon of vertices
+      // and (ii) - as a side effect - store the vertices for future use
+      // The lists of vertices that defines the polygon,
+      // first list is the
+      var polyVertices = Array<Int>()
+      
+      // Get each arc in turn
+      for a in list {
+        // This is a list of arc indices
+        // Each arc is indexed by a
+        // Is this arc read in reverse order?
+        let reverse = a < 0 ? true : false
         
-        // Can reuse vertices
-        for i in 0..<Triangulation.pointCount {
-          let x = dist(Triangulation.coords[2 * i], Triangulation.coords[2 * i + 1], p[0], p[1])
+        // Get the arc index (ones complement for negative numbers)
+        let arcIndex = reverse ? ~a : a
+        
+        // Is this arc already recorded?
+        var vertexArc = Zone.arcVertices[arcIndex]
+                  
+        // If this arc was examined before the vertices will be listed already
+        if vertexArc.isEmpty {
+          // The arc is itself a list of points
+          // The last point in each arc is the same as the first in the next arc
+          // Generate the vertices
+          let inputArc = arcs[arcIndex] // An Array<[Double,Double]>
           
-          // Is this a matching point?
-          if x < squaredThreshold {
-            indices.append(i)
-            continue roundList
-          }
+          // The points are mapped to vertices
+          roundList: for k in 0..<inputArc.count {
+            var p = inputArc[k]
+            
+            // Can reuse vertices - this can only happen in the same arc
+            if k > 0 {
+              // Is this a matching point?
+              // A duplicated point must be in the same arc
+              // Get each earlier point in this arc
+              for i in 0..<k {
+                // The input point q
+                let q = inputArc[i]
+                if q == p {
+                  // The same point
+                  vertexArc.append(vertexArc[i])
+                  continue roundList
+                }
+              }
+            }
+            
+            // A new point if none found -
+            // Transform the point p
+            for j in 0...1 {
+              p[j] = origin[j] + scale * p[j]
+            }
+            
+            // Save this point
+            Triangulation.coords.append(contentsOf: p)
+            
+            // Use the zone properties
+            Triangulation.code.append(NoZoneCode)
+            
+            // Save the vertex
+            vertexArc.append(Triangulation.pointCount)
+            Triangulation.pointCount += 1
+          } // End of each list
+        }
+          
+        // The vertices are now available
+        // In building the polygon loops
+        // note that the last & first vertices overlap
+        if reverse {
+          polyVertices.append(contentsOf: vertexArc.reversed())
+        } else {
+          polyVertices.append(contentsOf: vertexArc)
         }
         
-        // A new point if none found - input points are treated as members of a triangulation
-        Triangulation.coords.append(contentsOf: p)
-        
-        // Use the zone properties
-        Triangulation.code.append(NoZoneCode)
-        
-        indices.append(Triangulation.pointCount)
-        Triangulation.pointCount += 1
-      } // End of each list
+        // Drop the last vertex
+        polyVertices.removeLast()
+      } // end of the arc list
+      
+      // Return the list of vertices
+      return polyVertices
     }
     
-    // Or as explicit polygon of [x,y] points
-    var polygon = polygons.first!
     
     // Add a zone defined by a polygon
     name = zone.name
     code = zone.code
     properties = zone.properties
-    
-    // Was the list closed (geojson style?) 
-    if polygon.first! == polygon.last! { polygon.removeLast() }
-
-    // Check ordering
-    if stored.order != "anticlockwise" || Zone.order == "clockwise" { polygon.reverse() }
     
     // In this case
     // Zones can be referred to a specific origin
@@ -266,26 +332,28 @@ extension Zone {
     // And a scale factor can be applied
     let scale = stored.scale ?? Zone.scale
 
-    // Add the indices
-    add(to: &zoneIndices, fromPoints: polygon)
-    
+    //
+    // Use arcs to define points
+    // Get the first boundary - so polygons is Array<Array<Int>>
+    //                             each polygon Array<Array<Int>>
+    var polygon = polyFrom(arcs: polygons.first!)
+     
+    // Check ordering
+    if ClockWise { polygon.reverse() }
+
+    // The zone
+    zoneIndices.append(contentsOf: polygon)
+
     // Read the holes
     for h in 0..<polygons.count {
       if h > 0 {
-        var hole = polygons[h]
-
-        // Is this list closed?
-        if hole.first! == hole.last! { hole.removeLast() }
+        var hole = polyFrom(arcs: polygons[h])
 
         // Check ordering
-        if stored.order != "anticlockwise" || Zone.order == "clockwise" { hole.reverse() }
-
-        // Add the indices in this loop (which can be duplicated)
-        var indices = Array<Int>()
-        add(to: &indices, fromPoints: hole)
+        if ClockWise { hole.reverse() }
 
         // Save this
-        holeIndices.append(indices)
+        holeIndices.append(hole)
       } // End of each hole
     }
     
@@ -895,8 +963,10 @@ func triangulateZones(using storedData:StoredZones) throws {
   //
   Zone.scale = storedData.scale ?? Zone.scale
   Zone.origin = storedData.origin ?? Zone.origin
-  Zone.order = storedData.order ?? Zone.order
-
+  if let order = storedData.order {
+    ClockWise = order == "clockwise"
+  }
+  
   // Need to establish a bounding box
   // We can do this here because
   // other points added at the instance level always
@@ -928,10 +998,13 @@ func triangulateZones(using storedData:StoredZones) throws {
     }
   }
   
+  // Record the arcs if present
+  let arcs = storedData.arcs
+  
   // Read each instance
   var convexZoneList = Array<Zone>()
   for (_, z) in storedData.zones.enumerated() {
-    convexZoneList.append(contentsOf:try! Zone(usingData: z).convexZones)
+    convexZoneList.append(contentsOf:try! Zone(usingData: z, with: arcs).convexZones)
   }
   
   // Note the current zone code

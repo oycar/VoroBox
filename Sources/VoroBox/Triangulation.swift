@@ -1420,7 +1420,7 @@ extension Triangulation {
         // Record an edge linked to the hub vertex we wish to remove
         // Edges are not stable in the long term
         if vertices[s2] != list[hIndex] {
-          throw triangulationError.initError("Cannot find edge connected to hub \(list[hIndex])")
+          throw triangulationError.initError( "Cannot find edge connected to hub \(list[hIndex])")
         }
         
         // The hub edge
@@ -1440,7 +1440,9 @@ extension Triangulation {
           if list[hIndex] != vertices[a2] { break }
           a = Triangulation.hullNext[a]!
         } while a != f
-        if a == f { throw triangulationError.initError("Cannot find any edge not connected to hub \(list[hIndex])") }
+        if a == f { 
+          throw triangulationError.initError("Cannot find any edge not connected to hub \(list[hIndex])") 
+        }
         
         // remove this vertex
         try! removeVertex(from: hubEdge)
@@ -2924,7 +2926,7 @@ extension Triangulation {
         // Get next stack entry
         a = searchStack.popLast() ?? EmptyEdge
         if EmptyEdge == a {
-          throw triangulationError.initError("Couldn't find a triangle that encloses vertax \(p) => (\(px), \(py))")}
+          throw triangulationError.initError("Couldn't find a triangle that encloses vertex \(p) => (\(px), \(py))")}
       } while true
     }
     
@@ -3488,7 +3490,7 @@ extension Triangulation {
     } while x != start
     print("}")
     print("zones:")
-    print("  - list: [\(vString)]")
+    print("  - boundary: [\(vString)]")
   }
 
   // Create a yaml formatted zone file
@@ -3515,7 +3517,7 @@ extension Triangulation {
     for i in 0..<zoneList.count {
       let polygon = zoneList[i]
 
-      string += "  - list:\n"
+      string += "  - boundary:\n"
       string += "      ["
       
       for p in polygon {
