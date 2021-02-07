@@ -4,7 +4,7 @@
 name: USA
 order: clockwise
 properties:
-  showMe: 2
+  showMe: 1
 zones: 
 #  topojson style
   # - name: Maine

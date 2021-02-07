@@ -769,7 +769,7 @@ extension Triangulation {
       var loopStart:Int
       
       // Only do this when debugging
-      if showMe > 2 {
+      if showMe > 0 {
         let x = hullEdges.sorted {
           let a = vertices[$0.key]
           let b = vertices[$1.key]
@@ -1170,8 +1170,11 @@ extension Triangulation {
         iº += 1
       } while loopStart != fº
     } // End of Second Pass
-    
+        
     // Third pass folds out loops; removing the hub vertices
+    let numberHubs:Double = Double(Triangulation.loopVertices.count)
+    let hubStep:Int = max(Triangulation.loopVertices.count / 10, 10)
+    var countHubs = 0, hubThreshold = hubStep
     if showMe > 0 {
       print("Pass 3")
       print("\tFold Out Hub Corners")
@@ -1237,7 +1240,9 @@ extension Triangulation {
           hookVertex = rº
           Triangulation.loopHooks[sº] = rº
         }
-                
+        
+        if 209 == list[hIndex] { showMe = 3 }
+
         if showMe > 1 {
           let h = list[hIndex]
           print("\tindex => \(iº)")
@@ -1290,7 +1295,9 @@ extension Triangulation {
         // Add sº (which may just be rº)
         // eº     is the edge h  -> g
         // eº + 2 is the edge sº -> h
+        // This can cause a problem if in fact sº is not outside e
         let eº = addVertex(outside: e, vertex: sº)
+        
  
         // The values of e & f can be updated here
         e = eº + 1
@@ -1446,6 +1453,17 @@ extension Triangulation {
         
         // remove this vertex
         try! removeVertex(from: hubEdge)
+        
+        if showMe > 0 {
+          countHubs += 1
+          if countHubs > hubThreshold {
+            hubThreshold += hubStep
+            print("Processed \(countHubs) hubs : percentage \(100.0 * Double(countHubs) / numberHubs))")
+          }
+          
+          if 198 == list[hIndex] { showMe = 3 }
+
+        }
         
         // Get next edge
         e = a
