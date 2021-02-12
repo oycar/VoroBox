@@ -1301,7 +1301,7 @@ extension Triangulation {
           var replacedEdges = addVertex(on: f, vertex: rº)
           
           // New boundary edge is fº
-          let fº = replacedEdges[2] // Magic number, returns [f + 1, fº + 2, fº, f]           
+          let fº = replacedEdges[2] // Magic number, returns [f + 1, fº + 2, fº, f]
           showVoronoi(label: "fo_", type: "Delaunay")
           
           // Add sº (which may just be rº)
@@ -4132,86 +4132,16 @@ extension Triangulation {
     vtkString += "\nSCALARS properties int 1"
     vtkString += "\nLOOKUP_TABLE default"
     for (_, v) in zoneVertex.enumerated() {
-      let z =  Zone.iteration < 2 ? v : Triangulation.code[v]
+      //let z =  Zone.iteration < 2 ? v : Triangulation.code[v]
+      let z = Triangulation.code[v]
       vtkString += "\n\(z)"
     }
     
     return vtkString
   }
   
-  // A single zone
-  func showShell(label title:String, _ shell:Array<Int>, _ vertex:Int) {
-    // Logging
-    
-    // And a vtk file - edges
-    let folder = try! Folder(path: OutputFolder)
-    let filename = "edges_" + title + String(format:"%04d.vtk", vertex)
-    let file = try! folder.createFile(named: filename)
-
-  
-    // Draw a single zone
-    var vtkString = "# vtk DataFile Version 2.0\n"
-    vtkString += "Voronoi Diagram \(title)\n"
-    vtkString += "\nASCII\nDATASET UNSTRUCTURED_GRID\n"
-  
-    // The points are the shell
-    vtkString +=  String(format: "\nPOINTS %04d double", shell.count)
-    
-    // Average point for empty centres
-    for v in shell {
-      let p = [Triangulation.coords[2 * v], Triangulation.coords[2 * v + 1]]
-      vtkString += String(format: "\n%.7f %.7f 0", p[0], p[1])
-    }
-    
-    // These are going to be filled cells - so we need a complete polygon
-    vtkString += String(format: "\nCELLS %04d %04d", shell.count, 3 * shell.count)
-    for i in 0..<shell.count {
-      vtkString += "\n2 \(i) \((i+1) % shell.count)"
-    }
-    
-    // the cell types (edges)
-    vtkString += String(format: "\nCELL_TYPES %04d", shell.count)
-    for _ in 0..<shell.count {
-      vtkString += String(format: "\n3")
-    }
-    
-    // point data
-    vtkString += String(format: "\nPOINT_DATA %04d", shell.count)
-    
-    vtkString += "\nSCALARS edge int 1"
-    vtkString += "\nLOOKUP_TABLE default"
-    for v in shell {
-      vtkString += "\n\(v)"
-    }
-    
-    try! file.write(vtkString)
-  }
-  
-  
-  
-  
-  // func showLoop(label title:String, _ start:Int) {
-  //   print("# \(title)")
-  //   var vString = ""
-    
-  //   var x = start
-  //   print("points: {")
-  //   repeat {
-  //     let v = vertices[x]
-  //     vString += " v_\(v),"
-  //     print("# Vertex => \(v) Edge => \(x)")
-  //     print("v_\(v) : [\(Triangulation.coords[2 * v]), \(Triangulation.coords[2 * v + 1])], ")
-  //     x = Triangulation.hullNext[x]!
-  //   } while x != start
-  //   print("}")
-  //   print("zones:")
-  //   print("  - boundary: [\(vString)]")
-  // }
-
   // Create a yaml formatted zone file
-  func toZone() -> String {
-    var labels = Dictionary<String, Int>()
-    
+  func toZone() -> String {    
     // We are done!!
     Zone.iteration += 1
     var string = "# Yaml File\n"
@@ -4230,95 +4160,25 @@ extension Triangulation {
     string += "iteration: \(Zone.iteration)\n"
     string += "zones:\n"
     for i in 0..<zoneList.count {
-      let polygon = zoneList[i]
-
-      string += "  - boundary:\n"
-      string += "      ["
-      
-      for p in polygon {
-        let s = "_\(p)"
-        labels[s] = p
-        string += s + ","
-      }
-      string += "]\n"
-      
-
+      string += "  - polygon: [[\(i)]]\n"
     }
     
-    // Label all the points
-    string += "points: {\n"
-    for (s, p) in labels {
-      let c = triangleCentres[p]!
-      string += s + " : [\(c[0]), \(c[1])],"
+    // Now the arcs
+    string += "arcs: [[\n"
+    for (i, polygon) in zoneList.enumerated() {
+      string += "&_\(i) "
+      for p in polygon {
+        let c = triangleCentres[p]!
+
+        string += "[\(c[0]), \(c[1])],"
+      }
+      string += " *_\(i)"
     }
-    string += "}\n"
+    string += "]]\n"
     
     return string
   }
   
-  // Create a reproducible version of the input yaml file
-  func showZone(zones zoneList:Array<Zone>) {
-    let folder = try! Folder(path: OutputFolder)
-    let filename = "repro_\(Zone.name)_\(Zone.iteration).yml"
-    let file = try! folder.createFile(named: filename)
-    
-    var labels = Dictionary<Int, String>()
-
-    var string = "# Yaml File\n"
-    var coordinates = Array<Int>()
-    string += "name: \(Zone.name)\n"
-    string += "id: \(Zone.zoneID)\n"
-    string += "iteration: \(Zone.iteration)\n"
-    string += "zones:\n"
-    
-    for z in zoneList {
-      let polygon = z.zoneIndices
-      
-      string += "  - list:\n"
-      string += "      ["
-      
-      for i in 0..<z.polygonCount {
-        let p = polygon[i]
-        let s = "_\(p)"
-        labels[p] = s
-        string += s + ","
-      }
-      string += "]\n"
-      
-      // Associated properties
-      if let id = z.properties?.id {
-        string += "    properties:\n"
-        string += "      id: \(id)\n"
-      }
-      
-      // Extra points
-      var i = z.polygonCount
-      while i < z.zoneIndices.count {
-        coordinates.append(z.zoneIndices[i])
-        i += 1
-      }
-    }
-    
-    // Label all the points
-    string += "points: {\n"
-    //for (p, s) in labels {
-    for p in labels.keys.sorted() {
-      let s = labels[p]!
-      string += s + " : [\(Triangulation.coords[2 * p]), \(Triangulation.coords[2 * p + 1])],\n"
-    }
-    string += "}\n"
-    
-    // Coordinates
-    if !coordinates.isEmpty {
-      string += "coordinates: [\n"
-      for p in coordinates {
-        string += "  [\(Triangulation.coords[2 * p]), \(Triangulation.coords[2 * p] + 1)],"
-      }
-      string += "]\n"
-    }
-    
-    try! file.write(string)
-  }
   
   // Convenience function - the point indices of a triangle
   /* Triangle functions */

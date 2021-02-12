@@ -11,7 +11,7 @@ zones:
 
   # Define a reflex simple polygon
   - polygon: [[0], [-2]]
-  - polygon: [1]
+  - polygon: [[1]]
     properties:
       randomDensity: 2
 

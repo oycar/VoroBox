@@ -62,10 +62,7 @@ struct Zone: Codable {
   
   // Iteration
   static var iteration:Int = 0
-  
-  // Labelled Points (native way of defining points)
-  static var labelledPoints = Dictionary<String, Int>()
-  
+    
   // Arc vertices (when using topojson style zone files)
   static var arcVertices = Array<Array<Int>>()
   
@@ -155,52 +152,7 @@ extension Zone {
     //
     // This might be a multi-part zone
     
-    if var list = stored.boundary {
-      func add(to indices:inout Array<Int>, fromLabels list:Array<String>) {
-        // Add the indices
-        for label in list {
-          let i = Zone.labelledPoints[label]!
-          indices.append(i)
-        }
-      }
-      
-      // Was the list closed
-      // This allows the loop [a, b, c, ..., n]
-      // to be given as [a, b, c, ..., n, a]
-      if list.first! == list.last! { list.removeLast() }
-      
-      // Check ordering - this is the global setting
-      if ClockWise { list.reverse() }
-      
-      // Add the indices
-      add(to: &zoneIndices, fromLabels: list)
-      
-      // Read the holes
-      if let holes = stored.holes {
-        for h in 0..<holes.count {
-          var hole = holes[h]
-          
-          // Is this list closed?
-          if hole.first! == hole.last! { hole.removeLast() }
-
-          // Check ordering||
-          if ClockWise { hole.reverse() }
-          
-          // Add the indices in this loop (which can be duplicated)
-          var indices = Array<Int>()
-          add(to: &indices, fromLabels: hole)
-
-          // Save this
-          holeIndices.append(indices)
-        }
-      }
-      
-      // The polygon order
-      polygonCount = zoneIndices.count
-      
-      // Save this inputZone
-      inputZones.append(self)
-    } else if let polygons = stored.polygon {
+   if let polygons = stored.polygon {
       // Make polygons arrays of vertices
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
       
@@ -960,6 +912,8 @@ func triangulateZones(using storedData:StoredZones) throws {
     Zone.globalProperties = Properties(with: nil, 0, true)
   }
   
+ 
+
   //
   Zone.scale = storedData.scale ?? Zone.scale
   Zone.origin = storedData.origin ?? Zone.origin
@@ -976,34 +930,35 @@ func triangulateZones(using storedData:StoredZones) throws {
   var maxX = boundingBox[1][0]
   var maxY = boundingBox[1][1]
   
-  // Now any labelled points (which make up perimeters etc)
-  if let storedPoints = storedData.points {
-    for (label, point) in storedPoints {
-      let x = point[0], y = point[1]
-      
-      // Add to the list of points in the zone - always
-      Triangulation.coords.append(x)
-      Triangulation.coords.append(y)
-      Triangulation.code.append(NoZoneCode)
-      
-      // Need to tag these points
-      Zone.labelledPoints[label] = Triangulation.pointCount
-      Triangulation.pointCount += 1
-
-      // Compute bounds
-      if (x < minX)  {minX = x}
-      if (y < minY)  {minY = y}
-      if (x > maxX)  {maxX = x}
-      if (y > maxY)  {maxY = y}
-    }
-  }
-  
   // Record the arcs if present
   let arcs = storedData.arcs
+
+  // // Are there arcs?
+  // if var a = storedData.arcs {
+  //   // Get each arc 
+  //   for i
+
+
+
+
+  // }
+  // if let t = storedData.transform {
+  //   // First stab just transforms them 
+  //   if nil != arcs {
+  //     // Get each arc 
+  //     for a in arcs {
+  //       // Get each point in this arc 
+
+
+  //     }
+  //   }
+ 
+
+  // } else 
   
   // Read each instance
   var convexZoneList = Array<Zone>()
-  for (_, z) in storedData.zones.enumerated() {
+  for z in storedData.zones {
     convexZoneList.append(contentsOf:try! Zone(usingData: z, with: arcs).convexZones)
   }
   
@@ -1064,15 +1019,9 @@ func triangulateZones(using storedData:StoredZones) throws {
   // Make space for all the points
   Triangulation.pointCount = Triangulation.coords.count / 2
   Triangulation.triangulation = Triangulation(size: Triangulation.pointCount)
-
-  // For reproducible runs output the initial zone file
-  if showMe < 0 {
-    // A reproducible zone file for debugging
-    Triangulation.triangulation.showZone(zones: convexZoneList)
-  }
   
   if showMe != 0 {
-    print("Phase 0 - Triangulate initial \(convexZoneList.count) zones")
+    print("Pass 0 - Triangulate initial \(convexZoneList.count) zones")
   }
   
   // Now triangulate

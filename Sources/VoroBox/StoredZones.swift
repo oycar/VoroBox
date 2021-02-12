@@ -24,7 +24,6 @@ import Foundation
 // The Basic structure for JSON IO
 struct StoredZones : Codable {
   var zones: [Zone]
-  var points: Dictionary<String, Array<Double>>?
   var coordinates: Array<Array<Double>>?
   var arcs: Array<Array<Array<Double>>>?
 
@@ -36,6 +35,10 @@ struct StoredZones : Codable {
   var id:Int?
   var iteration:Int?
 
+  // Arc transform 
+  var transform: Transform?
+
+
   var origin: Array<Double>?
   var scale: Double?
   var order: String? = "anticlockwise"
@@ -45,18 +48,16 @@ struct StoredZones : Codable {
 
     var origin: Array<Double>?
     var scale: Double?
-    
-    // Standard description
-    var boundary:Array<String>?
-    var holes:Array<Array<String>>?
 
-    // Alternative topojson-like description
+    // Topojson-like description
     var polygon:Array<Array<Int>>?
     var multipolygon:Array<Array<Array<Int>>>?
+    var point:Array<Double>?
+    var multipoint:Array<Array<Double>>?
+
     // Properties associated with the zone
     var properties: Properties?
   }
-  
   
   struct Properties: Codable {
     // Zone properties
@@ -66,6 +67,12 @@ struct StoredZones : Codable {
 
     // debugging control
     var showMe:Int?
+  }
+
+  struct Transform: Codable {
+    // Arc transformations
+    var scale:Array<Double>?
+    var translate:Array<Double>?
   }
 }
 
