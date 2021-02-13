@@ -4164,17 +4164,17 @@ extension Triangulation {
     }
     
     // Now the arcs
-    string += "arcs: [[\n"
+    string += "arcs: [\n"
     for (i, polygon) in zoneList.enumerated() {
-      string += "&_\(i) "
+      string += "[&_\(i) "
       for p in polygon {
         let c = triangleCentres[p]!
 
         string += "[\(c[0]), \(c[1])],"
       }
-      string += " *_\(i)"
+      string += " *_\(i)]"
     }
-    string += "]]\n"
+    string += "]\n"
     
     return string
   }

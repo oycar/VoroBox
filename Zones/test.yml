@@ -3,17 +3,21 @@
 #
 # Use modified & simplified TopoJSON format
 #
-name: random
+type: Topology
+name: Vorobox
 properties:
   randomDensity: 200
   showMe: 1
-zones:
-
-  # Define a reflex simple polygon
-  - polygon: [[0], [-2]]
-  - polygon: [[1]]
-    properties:
-      randomDensity: 2
+objects:
+  random:
+    - type: GeometryCollection
+      geometries:
+        # Define a reflex simple polygon
+        - type: Polygon
+          polygon: [[0], [-2]]
+        - polygon: [[1]]
+          properties:
+            randomDensity: 2
 
 arcs: [
   [&A [-3, -1], [21, -1], [21, 18], [-3, 18], *A],
