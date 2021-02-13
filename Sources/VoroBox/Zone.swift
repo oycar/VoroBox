@@ -21,9 +21,6 @@
 //
 import Foundation
 
-// Zone winding
-internal var ClockWise = false
-
 // Properties
 struct Properties: Codable {
   // Zone properties
@@ -424,8 +421,8 @@ extension Zone {
     //                             each polygon Array<Array<Int>>
     var polygon = polyFrom(arcs: polygons.first!)
      
-    // Check ordering
-    if ClockWise { polygon.reverse() }
+    // Check ordering - boundaries should be anticlockwise
+    if isClockwise(polygon) { polygon.reverse() }
 
     // The zone
     zoneIndices.append(contentsOf: polygon)
@@ -435,8 +432,8 @@ extension Zone {
       if h > 0 {
         var hole = polyFrom(arcs: polygons[h])
 
-        // Check ordering
-        if ClockWise { hole.reverse() }
+        // Check ordering -  holes should be clockwise
+        if !isClockwise(hole) { hole.reverse() }
 
         // Save this
         holeIndices.append(hole)
@@ -629,8 +626,8 @@ extension Zone {
             let px = Triangulation.coords[2 * p], py = Triangulation.coords[2 * p + 1]
 
             // Orientations?
-            if orientIfSure(ax, ay, bx, by, px, py) >= 0 && orientIfSure(bx, by, cx, cy, px, py) >= 0 {
-              let o2d = orientIfSure(cx, cy, ax, ay, px, py)
+            if orient(ax, ay, bx, by, px, py) >= 0 && orient(bx, by, cx, cy, px, py) >= 0 {
+              let o2d = orient(cx, cy, ax, ay, px, py)
               if o2d >= max2D {
                 max2D = o2d
                 closest = (h, index)
@@ -871,7 +868,7 @@ extension Zone {
     let b = 2 * zoneIndices[(j + polygonCount) % polygonCount]
     let c = 2 * zoneIndices[(k + polygonCount) % polygonCount]
     
-    return orientIfSure(Triangulation.coords[a], Triangulation.coords[a + 1],
+    return orient(Triangulation.coords[a], Triangulation.coords[a + 1],
                         Triangulation.coords[b], Triangulation.coords[b + 1],
                         Triangulation.coords[c], Triangulation.coords[c + 1])
   }
@@ -956,10 +953,10 @@ extension Zone {
     let cx = Triangulation.coords[2 * c], cy = Triangulation.coords[2 * c + 1]
     let dx = Triangulation.coords[2 * d], dy = Triangulation.coords[2 * d + 1]
     
-    let abcOrient = orientIfSure(ax, ay, bx, by, cx, cy)
-    let abdOrient = orientIfSure(ax, ay, bx, by, dx, dy)
-    let cdaOrient = orientIfSure(cx, cy, dx, dy, ax, ay)
-    let cdbOrient = orientIfSure(cx, cy, dx, dy, bx, by)
+    let abcOrient = orient(ax, ay, bx, by, cx, cy)
+    let abdOrient = orient(ax, ay, bx, by, dx, dy)
+    let cdaOrient = orient(cx, cy, dx, dy, ax, ay)
+    let cdbOrient = orient(cx, cy, dx, dy, bx, by)
     
     
     // If exactly one each of the pairs of triangles abc, abd & cda, cdb
@@ -1003,7 +1000,7 @@ func isInside(boundary indices:Array<Int>, size polygonCount:Int, query_x queryX
           qx = Triangulation.coords[2 * indices[j]] - queryX
       
       // Sum area signs
-      let area = orientIfSure(px, py, qx, qy, 0, 0)
+      let area = orient(px, py, qx, qy, 0, 0)
       if area != 0 {
         crossings += area > 0 ? 1 : -1
       }
@@ -1012,6 +1009,30 @@ func isInside(boundary indices:Array<Int>, size polygonCount:Int, query_x queryX
   
   // True if positive
   return crossings > 0
+}
+
+// Is a loop clockwise or anticlockwise?
+func isClockwise(_ loop:Array<Int>) -> Bool {
+  // Get the bottom right corner of the loop
+  let a = loop.min { u, v in
+    let ux = Triangulation.coords[2 * u], vx = Triangulation.coords[2 * v]
+
+    if ux != vx { return ux < vx}
+    let uy = Triangulation.coords[2 * u + 1], vy = Triangulation.coords[2 * v + 1]
+    return uy < vy
+  }
+  
+  // Which index is this
+  let i = loop.firstIndex(of: a!)
+  
+  // Get the area of the triangle here
+  let polygonCount = loop.count
+  let b = loop[(i! + 1) % polygonCount]
+  let c = loop[(i! + polygonCount - 1) % polygonCount]
+
+  return orient(Triangulation.coords[2 * a!], Triangulation.coords[2 * a! + 1],
+                Triangulation.coords[2 * b], Triangulation.coords[2 * b + 1],
+                Triangulation.coords[2 * c], Triangulation.coords[2 * c + 1]) < 0
 }
 
 // Process the input data
@@ -1049,9 +1070,6 @@ func triangulateZones(using storedData:StoredZones) throws {
   //
   Zone.scale = storedData.scale ?? Zone.scale
   Zone.origin = storedData.origin ?? Zone.origin
-  if let order = storedData.order {
-    ClockWise = order == "clockwise"
-  }
   
   // Need to establish a bounding box
   // We can do this here because

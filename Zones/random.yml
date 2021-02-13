@@ -3,47 +3,24 @@
 #
 # Use modified & simplified TopoJSON format
 #
-name: random
+type: Topology
+name: Vorobox
 properties:
   randomDensity: 200
   showMe: 1
-zones:
-
-  # Define a reflex simple polygon
-  - polygon: [[0], [-2]]
-  - polygon: [1]
-    properties:
-      randomDensity: 2
+objects:
+  random:
+    - type: GeometryCollection
+      geometries:
+        # Define a reflex simple polygon
+        - type: Polygon
+          polygon: [[0], [-2]]
+        - polygon: [[1]]
+          properties:
+            randomDensity: 2
 
 arcs: [
   [&A [-3, -1], [21, -1], [21, 18], [-3, 18], *A],
   [&a [10, 7],  [12, 3],  [20, 8],  [13, 17], [10, 12], [12, 14], [14, 9],  [8, 10], [6, 14], [10, 15], [7, 17],  [0, 16],  [1, 13], [3, 15], [5, 8], [-2, 9],  [5, 5],   [0, 0], *a]
  ]
-#
-#--- # Random.Yml
-#
-##
-## Use modified & simplified TopoJSON format
-##
-#type: VoroBox
-#name: random
-#properties:
-#  randomDensity: 200
-#  showMe: 1
-#objects:
-#  zebra:
-#    type: GeometryCollection
-#    geometries:
-#      # Define a reflex simple polygon
-#      - type: Polygon
-#        polygon: [[0], [-2]]
-#      - type: Polygon
-#        polygon: [1]
-#        properties:
-#          randomDensity: 2
-#
-#arcs: [
-#  [&A [-3, -1], [21, -1], [21, 18], [-3, 18], *A],
-#  [&a [10, 7],  [12, 3],  [20, 8],  [13, 17], [10, 12], [12, 14], [14, 9],  [8, 10], [6, 14], [10, 15], [7, 17],  [0, 16],  [1, 13], [3, 15], [5, 8], [-2, 9],  [5, 5],   [0, 0], *a]
-# ]
-#
+

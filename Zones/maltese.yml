@@ -4,6 +4,7 @@
 # Triangulate a cross with a central point that
 # will appear in the same loop multiple times
 #
+type: Topology
 name: maltese
 
 # Default global properties
@@ -13,19 +14,20 @@ properties: &globalProperties
   showMe: 1
   
 # inverted cross
-# Example of using labels and yaml anchors together to give input flexibility
 
+objects:
+  zebra:
+    - type: GeometryCollection
+      geometries:
+        # Define an inverted Maltese cross
+        # Standard method
+        - polygon: [[0], [-5, -4, -3, -2]]
 
-zones:
-  # Define an inverted Maltese cross
-  # Standard method
-  - polygon: [[0], [-5, -4, -3, -2]]
-
-  # Define an offset Maltese cross
-  # because we are applying an offset use the multipolygon style
-  # This has four distinct regions
-  - multipolygon: [[[1]], [[2]], [[3]], [[4]]]
-    origin: [4, 0]
+        # Define an offset Maltese cross
+        # because we are applying an offset use the multipolygon style
+        # This has four distinct regions
+        - multipolygon: [[[1]], [[2]], [[3]], [[4]]]
+          origin: [4, 0]
 
 arcs: [
  [&a [-2, -2], [2, -2], [2, 2], [-2, 2], *a],

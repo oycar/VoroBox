@@ -2,7 +2,6 @@
 #
 #
 name: USA
-order: clockwise
 properties:
   showMe: 1
 zones: 
