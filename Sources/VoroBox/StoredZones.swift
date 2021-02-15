@@ -25,7 +25,7 @@ import Foundation
 struct StoredZones : Codable {
   var type:String
   var objects: Dictionary<String, Array<GeometryCollection>>
-  var arcs: Array<Array<Array<Double>>>?
+  var arcs: Array<Array<Array<Double>>>
   var conformingTo:String?
   var name:String?
   
@@ -37,9 +37,6 @@ struct StoredZones : Codable {
   // Arc transform
   var transform: Transform?
   
-  var origin: Array<Double>?
-  var scale: Double?
-  
   struct GeometryCollection : Codable {
     var type:String
     var geometries: Array<Zone>
@@ -49,7 +46,7 @@ struct StoredZones : Codable {
     var name: String?
 
     var origin: Array<Double>?
-    var scale: Double?
+    var scale: Array<Double>?
     
     // Topojson-like description
     var polygon:Array<Array<Int>>?

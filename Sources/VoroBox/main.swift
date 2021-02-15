@@ -33,7 +33,7 @@ do {
   print ("Zone creation failed with error: \(error)")
 }
 // Write output data
-var filename = "cells_" + Zone.name
+var filename = "cells_" + Zone.name!
 do {
   let iteration:Int = Zone.iteration + 1
   let folder = try Folder(path: OutputFolder)
@@ -48,7 +48,7 @@ do {
     let x = Triangulation.triangulation.toVoronoi()
     try file.write(Triangulation.triangulation.vtkVoronoi(x))
     
-    file = try folder.createFile(named: Zone.name + ".yml")
+    file = try folder.createFile(named: Zone.name! + ".yml")
     try file.write(Triangulation.triangulation.toZone())
   } else {
     // Delaunay
@@ -56,15 +56,15 @@ do {
   }
   
   // And a vtk file showing the edges
-  filename = "edges_" + Zone.name
+  filename = "edges_" + Zone.name!
   if iteration > 1 {
     filename += "\(iteration)"
   }
   file = try! folder.createFile(named: filename + ".vtk")
-  try file.write(Triangulation.triangulation.vtkEdges(label: Zone.name, type: "Voronoi"))
+  try file.write(Triangulation.triangulation.vtkEdges(label: Zone.name!, type: "Voronoi"))
   if !conforming {
     file = try! folder.createFile(named: filename + "_triangulation.vtk")
-    try file.write(Triangulation.triangulation.vtkEdges(label: Zone.name, type: "Delaunay"))
+    try file.write(Triangulation.triangulation.vtkEdges(label: Zone.name!, type: "Delaunay"))
   }
 } catch {
   fatalError("Couldn't write \(filename)\n\(error)")

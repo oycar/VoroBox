@@ -3,7 +3,6 @@
 # Use modified & simplified TopoJSON format
 #
 type: Topology
-name: Vorobox
 properties:
   randomDensity: 0
   showMe: 1

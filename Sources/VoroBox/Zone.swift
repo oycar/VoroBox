@@ -49,7 +49,7 @@ internal var showMe = 0
 // The Zone structure
 struct Zone: Codable {
   // A global name
-  static var name:String = "Zone Name"
+  static var name:String? = nil
   
   // This should be a Triangulation Boolean
   static var hullConforming: Bool?
@@ -65,13 +65,17 @@ struct Zone: Codable {
   
   // Global properties
   static var origin:Array<Double> = [0, 0]
-  static var scale:Double = 1
+  static var scale:Array<Double> = [1, 1]
   
   // Instance properties
   var clockwise:Bool = false
 
   // The optional instance name
   var name: String?
+  
+  // Instance properties
+  var origin:Array<Double> = [0, 0]
+  var scale:Array<Double> = [1, 1]
 
   // The polygon bounding the zone
   // along with its size
@@ -98,7 +102,7 @@ struct Zone: Codable {
 // The actual zone structure ...
 extension Zone {
   // Read in a zone defined in a data file
-  init(usingData stored: StoredZones.Zone, with arcs:Array<Array<Array<Double>>>?) throws {
+  init(usingData stored: StoredZones.Zone, with arcs:Array<Array<Array<Double>>>) throws {
     var inputZones = Array<Zone>()
     
     // Name this zone
@@ -132,11 +136,8 @@ extension Zone {
     // Set code - when even the zone is Voronoi conforming (the default)
     Zone.zoneID += 1
     
-    // The zones' (may) have a list of arcs associated with them
-    if let a = arcs {
-      // Make space for the arcs
-      Zone.arcVertices = Array(repeating: [], count: a.count)
-    }
+    // Make space for the arcs
+    Zone.arcVertices = Array(repeating: [], count: arcs.count)
     
     // Initially we are reading the stored data, which can define
     // a reflex polygon - so we need to create a collection
@@ -154,11 +155,11 @@ extension Zone {
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
       
       // Define a zone using a polygon
-      inputZones.append(Zone(copy: self, using: polygons, and: arcs!, data: stored))
+      inputZones.append(Zone(copy: self, using: polygons, and: arcs, data: stored))
     } else if let multipolygons = stored.multipolygon {
       // This is quite straightforward now
       for polygons in multipolygons {
-        inputZones.append(Zone(copy: self, using: polygons, and: arcs!, data: stored))
+        inputZones.append(Zone(copy: self, using: polygons, and: arcs, data: stored))
       }
     }
     
@@ -370,7 +371,7 @@ extension Zone {
             // A new point if none found -
             // Transform the point p
             for j in 0...1 {
-              p[j] = origin[j] + scale * p[j]
+              p[j] = origin[j] + scale[j] * p[j]
             }
             
             // Save this point
@@ -408,12 +409,20 @@ extension Zone {
     code = zone.code
     properties = zone.properties
     
-    // In this case
+    // Zone scale (mapped by global scale if reqired)
     // Zones can be referred to a specific origin
-    let origin  = stored.origin ?? Zone.origin
+    if let o = stored.origin {
+      origin  = [o[0] * Zone.scale[0], o[1] * Zone.scale[1]]
+    } else {
+      origin  = Zone.origin
+    }
     
     // And a scale factor can be applied
-    let scale = stored.scale ?? Zone.scale
+    if let s = stored.scale {
+      scale  = [s[0] * Zone.scale[0], s[1] * Zone.scale[1]]
+    } else {
+      scale  = Zone.scale
+    }
 
     //
     // Use arcs to define points
@@ -675,7 +684,7 @@ extension Zone {
       // This can be improved
       untilConvex: while polygonCount > 3 && (!holeIndices.isEmpty || ears.count < polygonCount) {
 
-        // For testing turn off reverible clip
+        // For testing turn off reversible clip
         var reversibleClip = true
          
         // Get the ear at the end of the list
@@ -753,6 +762,11 @@ extension Zone {
           }
         }
         
+        // Two ears theorem 
+        if ears.count < 2 {
+          print("clipZone: For polygon order \(polygonCount) only \(ears.count) - should be at least two ears")
+          throw triangulationError.initError("Less than two ears in clipZone - malformed input?")
+        }
         // Update convexZone with the clip
         convexZone = nil == convexZone ? z : try! convexZone!.addTriangularZone(triangle: z)
         
@@ -811,7 +825,7 @@ extension Zone {
     }
     
     // Oops
-    throw zoneError.initError("Zone \(Zone.name) can't find matching vertices to join two zones")
+    throw zoneError.initError("Zone \(Zone.name!) can't find matching vertices to join two zones")
   }
   
   //
@@ -851,7 +865,7 @@ extension Zone {
 
     // Scrambled polygon
     if ears.count < 2 {
-      throw zoneError.initError("Zone \(Zone.name) can't find two ears in the polygon \(zoneIndices)")
+      throw zoneError.initError("Zone \(Zone.name!) can't find two ears in the polygon \(zoneIndices)")
     }
 
     // Return the ear list
@@ -1042,8 +1056,7 @@ func isClockwise(_ loop:Array<Int>) -> Bool {
 func triangulateZones(using storedData:StoredZones) throws {
 
   // Set the static variables
-  // First the name
-  Zone.name = storedData.name ?? "Nemo"
+
   if let c = storedData.conformingTo {
     Zone.hullConforming = (c  == "Voronoi")
   } else {
@@ -1065,27 +1078,49 @@ func triangulateZones(using storedData:StoredZones) throws {
     Zone.globalProperties = Properties(with: nil, 0, true)
   }
   
- 
-
-  //
-  Zone.scale = storedData.scale ?? Zone.scale
-  Zone.origin = storedData.origin ?? Zone.origin
-  
   // Need to establish a bounding box
   // We can do this here because
   // other points added at the instance level always
   // conform the the specified perimeter
-
   
-  // Record the arcs if present
-  let arcs = storedData.arcs
+  // Get the arcs (must be present)
+  var arcs = storedData.arcs
+  
+  // Get the transform
+  if let transform = storedData.transform {
+    // The arcs are quantized
+    for i in 0..<arcs.count {
+      // Current point (translated)
+      var x:Double = 0, y:Double = 0
+      
+      // Get each subsequent point in the arc - scaling is done at a later stage
+      for j in 0..<arcs[i].count {
+        x += arcs[i][j][0]
+        y += arcs[i][j][1]
+        arcs[i][j][0] = x
+        arcs[i][j][1] = y
+      }
+    }
+    
+    // The transform is the global scale
+    Zone.scale = transform.scale!
+    Zone.origin = transform.translate!
+  }
  
   // The objects
   let objects:Dictionary<String, Array<StoredZones.GeometryCollection>> = storedData.objects
   var convexZoneList = Array<Zone>()
   for (key, geometryCollection) in objects {
-    print("Key => \(key) Object => \(geometryCollection)")
-  
+    // Empty name? 
+    if nil == Zone.name {
+      if let n = storedData.name {
+        Zone.name = n
+      } else { 
+        Zone.name = key 
+      }
+    }
+ 
+
     // Read each instance
     for g in geometryCollection {
       for z in g.geometries {

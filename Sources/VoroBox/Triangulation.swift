@@ -1220,10 +1220,12 @@ extension Triangulation {
         // Get the vertices waiting to be added
         iº += 1
         
+        // debugging
+
         // Unpack the vertices
         let pº = list[pIndex], qº = list[qIndex]
         let rº = list[rIndex], sº = list[sIndex]
-        
+
         // Reindex these vertices
         Triangulation.loopVertices[rº] = list
         
@@ -3254,7 +3256,7 @@ extension Triangulation {
   mutating func vtkDelaunay() -> String {
     // We are done!
     var vtkString = "# vtk DataFile Version 2.0\n"
-    vtkString += "Delaunay Mesh \(Zone.name)\n"
+    vtkString += "Delaunay Mesh \(Zone.name!)\n"
     vtkString += "\nASCII\nDATASET UNSTRUCTURED_GRID\n"
     
     // No editing - just give all the points
@@ -3390,7 +3392,7 @@ extension Triangulation {
   mutating func vtkVoronoi(_ zoneCount:Int) -> String {
     // We are done!
     var vtkString = "# vtk DataFile Version 2.0\n"
-    vtkString += "Voronoi Diagram \(Zone.name)\n"
+    vtkString += "Voronoi Diagram \(Zone.name!)\n"
     vtkString += "\nASCII\nDATASET UNSTRUCTURED_GRID\n"
     
     // The points are the centres of the circumcircles
@@ -3441,8 +3443,7 @@ extension Triangulation {
   func toZone() -> String {    
     // We are done!!
     Zone.iteration += 1
-    var string = "# Yaml File\n"
-    string += "name: \(Zone.name)\n"
+    var string = "# Yaml File\ntype: Vorobox\n"
     string += "id: \(Zone.zoneID)\n"
     // Associated code
     let code = Triangulation.code[zoneVertex.last!]
@@ -3455,10 +3456,17 @@ extension Triangulation {
     }
     
     string += "iteration: \(Zone.iteration)\n"
-    string += "zones:\n"
+
+    // Geometry
+    string += "objects:\n"
+    string += "  \(Zone.name!):\n"
+    string += "    - type: GeometryCollection\n"
+    string += "      geometries:\n"
+    string += "        - multipolygon: ["
     for i in 0..<zoneList.count {
-      string += "  - polygon: [[\(i)]]\n"
+      string += "[[\(i)]], "
     }
+    string += "]\n"
     
     // Now the arcs
     string += "arcs: [\n"
@@ -3469,7 +3477,7 @@ extension Triangulation {
 
         string += "[\(c[0]), \(c[1])],"
       }
-      string += " *_\(i)]"
+      string += " *_\(i)],\n"
     }
     string += "]\n"
     
