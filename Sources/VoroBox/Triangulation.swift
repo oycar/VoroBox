@@ -3431,7 +3431,6 @@ extension Triangulation {
     vtkString += "\nSCALARS properties int 1"
     vtkString += "\nLOOKUP_TABLE default"
     for (_, v) in zoneVertex.enumerated() {
-      //let z =  Zone.iteration < 2 ? v : Triangulation.code[v]
       let z = Triangulation.code[v]
       vtkString += "\n\(z)"
     }
@@ -3442,20 +3441,16 @@ extension Triangulation {
   // Create a yaml formatted zone file
   func toZone() -> String {    
     // We are done!!
-    Zone.iteration += 1
     var string = "# Yaml File\ntype: Vorobox\n"
-    string += "id: \(Zone.zoneID)\n"
     // Associated code
     let code = Triangulation.code[zoneVertex.last!]
     if NoZoneCode != code {
-      let rho = Zone.globalProperties?.randomDensity
-      string += "properties:\n"
+      string += "control:\n"
       string += "  id: \(-code)\n"
-      string += "  randomDensity: \(2 * (rho ?? 0))\n"
+      // string += "  randomDensity: \(2 * (rho ?? 0))\n"
       string += "  showMe: \(showMe)\n"
+      string += "  iteration: \(Zone.control.iteration + 1)\n"
     }
-    
-    string += "iteration: \(Zone.iteration)\n"
 
     // Geometry
     string += "objects:\n"

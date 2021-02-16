@@ -4,14 +4,14 @@
 # Use modified & simplified TopoJSON format
 #
 type: Vorobox
-properties:
-  randomDensity: 0
-  showMe: 1
+control: { showMe: 1 }
+
 objects:
   square:
     - type: GeometryCollection
       geometries:
         - multipolygon: [[[0]], [[1]], [[2]], [[3]]]
+          multirandom: [0, 0, 0, 0]
 
 
 arcs: [[&0 [0, 0], [1, 0], [1, 1], [0, 1], *0],

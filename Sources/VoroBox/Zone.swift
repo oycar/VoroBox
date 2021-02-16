@@ -25,17 +25,30 @@ import Foundation
 struct Properties: Codable {
   // Zone properties
   var randomDensity:Double?
-  var id:Int?
-  var distinct:Bool?
-  var showMe:Int?
 }
 
 extension Properties {
-  init(with density:Double? = nil, _ i:Int? = nil, _ flag:Bool? = true, _ show:Int? = nil) {
+  init(with density:Double? = nil) {
     randomDensity = density
-    id = i
-    distinct = flag
-    showMe = show
+  }
+}
+
+// Control 
+// Properties
+struct Control: Codable {
+  // Zone properties
+  var id:Int = FirstZone
+  var iteration:Int = 0
+  var distinct:Bool = true
+  var showMe:Int = 0
+}
+
+extension Control {
+  init(from c:StoredZones.Control) {
+    id = c.id ?? FirstZone
+    distinct = c.distinct ?? true
+    showMe = c.showMe ?? 0
+    iteration = c.iteration ?? 0
   }
 }
 
@@ -53,25 +66,14 @@ struct Zone: Codable {
   
   // This should be a Triangulation Boolean
   static var hullConforming: Bool?
-
-  // A counter - start at FirstZone
-  static var zoneID = FirstZone
-  
-  // Iteration
-  static var iteration:Int = 0
-    
+      
   // Arc vertices (when using topojson style zone files)
   static var arcVertices = Array<Array<Int>>()
   
   // Global properties
+  static var control:Control = Control()
   static var origin:Array<Double> = [0, 0]
   static var scale:Array<Double> = [1, 1]
-  
-  // Instance properties
-  var clockwise:Bool = false
-
-  // The optional instance name
-  var name: String?
   
   // Instance properties
   var origin:Array<Double> = [0, 0]
@@ -95,7 +97,6 @@ struct Zone: Codable {
   var code: Int = 1
 
   // Control of point insertion
-  static var globalProperties:Properties?
   var properties: Properties?
 }
 
@@ -105,36 +106,18 @@ extension Zone {
   init(usingData stored: StoredZones.Zone, with arcs:Array<Array<Array<Double>>>) throws {
     var inputZones = Array<Zone>()
     
-    // Name this zone
-    name = stored.name
-    
-    // Global properties can give defaults
+    // Global controls 
     var distinct = Zone.hullConforming ?? true
-    if let g = Zone.globalProperties {
-      properties = Properties(with: g.randomDensity, g.id, g.distinct, g.showMe)
-      if nil != g.distinct { distinct = g.distinct! }
-      if nil != g.showMe { showMe = g.showMe! }
-      
-      if let p = stored.properties {
-        properties = Properties(with: p.randomDensity ?? g.randomDensity, p.id ?? g.id, p.distinct ?? g.distinct, p.showMe ?? g.showMe)
-        if nil != p.distinct { distinct = p.distinct! }
-        if nil != p.showMe { showMe = p.showMe! }
-      }
-    } else if let p = stored.properties {
-      // No default
-      properties = Properties(with: p.randomDensity, p.id)
-      if nil != p.distinct { distinct = p.distinct! }
-      if nil != p.showMe { showMe = p.showMe! }
-    }
+    showMe = Zone.control.showMe 
     
     // Set the zone code
-    code = 2 * Zone.zoneID
+    code = 2 * Zone.control.id
 
     // Update the code depending on if this zone is distinct or not
     if distinct { code += 1 } // Code is odd for conforming edges
     
     // Set code - when even the zone is Voronoi conforming (the default)
-    Zone.zoneID += 1
+    Zone.control.id += 1
     
     // Make space for the arcs
     Zone.arcVertices = Array(repeating: [], count: arcs.count)
@@ -144,8 +127,6 @@ extension Zone {
     // of convex zones
         
     // We are given the co-ordinates
-    // Either as labelled points in a list of strings
-    // Need to find the points that correspond to these
     // Only  the first array is needed to construct the boundary
     //
     // This might be a multi-part zone
@@ -278,37 +259,43 @@ extension Zone {
     // Now add random points
     // Update zone count
     Triangulation.pointCount = Triangulation.coords.count / 2
-    if let density:Double = properties!.randomDensity {
-      // Number of points is density times box area
-      var r:Double = density * (maxX - minX) * (maxY - minY)
-      r.round(.up)
+
+    // This is a clumsy make do
+    // Can be replaced once other components working
+    let density:Double = Double.random(in: 0...100)
+    
+    // Number of points is density times box area
+    var r:Double = density * (maxX - minX) * (maxY - minY)
+    r.round(.up)
       
-      // Add the points
-      nextRandomPoint: for _ in 0..<Int(r) {
-        // Add points inside  the zone
-        let x = Double.random(in: minX...maxX), y = Double.random(in: minY...maxY)
-        
-        // Append the point
-        if isInside(boundary: zoneIndices, size: polygonCount, query_x: x, query_y: y) {
-          // Skip any inside a hole
-          for h in holeIndices {
-            if isInside(boundary: h.reversed(), size: h.count, query_x: x, query_y: y) {
-              // Inside a hole
-              continue nextRandomPoint
-            }
+    // Add the points
+    var ii = Int(r)
+    nextRandomPoint: while ii > 0 {
+      // Add points inside  the zone
+      let x = Double.random(in: minX...maxX), y = Double.random(in: minY...maxY)
+      
+      // Append the point
+      if isInside(boundary: zoneIndices, size: polygonCount, query_x: x, query_y: y) {
+        // Skip any inside a hole
+        for h in holeIndices {
+          if isInside(boundary: h.reversed(), size: h.count, query_x: x, query_y: y) {
+            // Inside a hole
+            continue nextRandomPoint
           }
-          
-          // New point - set coordinates
-          Triangulation.coords.append(x)
-          Triangulation.coords.append(y)
-          
-          // This needs the zone code
-          Triangulation.code.append(code)
-          
-          // Set zone index
-          zoneIndices.append(Triangulation.pointCount)
-          Triangulation.pointCount += 1
         }
+        
+        // New point - set coordinates
+        Triangulation.coords.append(x)
+        Triangulation.coords.append(y)
+        
+        // This needs the zone code
+        Triangulation.code.append(code)
+        
+        // Set zone index
+        zoneIndices.append(Triangulation.pointCount)
+        Triangulation.pointCount += 1
+
+        ii -= 1
       }
     } // Add random points
     
@@ -366,27 +353,6 @@ extension Zone {
 
             // Do we need to check other arcs?
             if beforeIndex > 0 {
-              // // Nested function to check a completed arc list 
-              // func check(arcs boundary:Array<Int>, for point:Array<Double>) -> Int {
-              //   for b in boundary {
-              //     // This is a list of arc indices
-              //     // Each arc is indexed by b                  
-              //     // Get the arc index (ones complement for negative numbers)
-              //     let boundaryIndex = b < 0 ? ~b : b
-                  
-              //     //  This arc is recorded already
-              //     let vertexList = Zone.arcVertices[boundaryIndex]
-                    
-              //     // Is the point in the boundary?
-              //     if let vertexIndex = arcs[boundaryIndex].firstIndex(of: point) {
-              //       return vertexList[vertexIndex]
-              //     }
-              //   }
-
-              //   // Not found
-              //   return EmptyVertex
-              // }
-
               // Yes 
               for i in 0..<beforeIndex {
                 // The polygon boundaries to check 
@@ -399,21 +365,12 @@ extension Zone {
                   // Get the arc index (ones complement for negative numbers)
                   let boundaryIndex = b < 0 ? ~b : b
                   
-                  //  This arc is recorded already
-                  //let vertexList = Zone.arcVertices[boundaryIndex]
-                    
                   // Is the point in the boundary?
                   if let vertexIndex = arcs[boundaryIndex].firstIndex(of: p) {
                     Zone.arcVertices[arcIndex].append(Zone.arcVertices[boundaryIndex][vertexIndex])
                     continue roundList
                   }
                 }
-
-                // let v = check(arcs:boundaryArcs, for:p)
-                // if v != EmptyVertex {
-                //   Zone.arcVertices[arcIndex].append(v)
-                //   continue roundList
-                // }
               }
             }
             
@@ -453,7 +410,6 @@ extension Zone {
     }
     
     // Add a zone defined by a polygon
-    name = zone.name
     code = zone.code
     properties = zone.properties
     
@@ -505,10 +461,9 @@ extension Zone {
   }
   
   // Some specialized inits
-  init(clip zone: Zone, ear i:Int, order n:Int, label optionalName:String? = nil) {
+  init(clip zone: Zone, ear i:Int, order n:Int) {
     // This handles the case of convex zones
     // This generates a triangular zone
-    name = optionalName
     polygonCount = n // Its an n-gon - can be zero
     
     // clipped zones inherit parent code
@@ -1107,26 +1062,17 @@ func isClockwise(_ loop:Array<Int>) -> Bool {
 func triangulateZones(using storedData:StoredZones) throws {
 
   // Set the static variables
-
   if let c = storedData.conformingTo {
     Zone.hullConforming = (c  == "Voronoi")
   } else {
     Zone.hullConforming = true
   }
-  
-  // Update zone ID
-  if let storedID = storedData.id {
-    if storedID > Zone.zoneID  { Zone.zoneID = storedID }
-  }
-  
-  // Update iteration
-  Zone.iteration = storedData.iteration ?? 0
-  
-  // Global properties
-  if let p = storedData.properties {
-    Zone.globalProperties = Properties(with: p.randomDensity, p.id, p.distinct, p.showMe)
+    
+  //  Some control settings 
+  if let c = storedData.control {
+    Zone.control = Control(from: c)
   } else {
-    Zone.globalProperties = Properties(with: nil, 0, true)
+    Zone.control = Control()
   }
   
   // Need to establish a bounding box

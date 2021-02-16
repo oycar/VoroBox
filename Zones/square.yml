@@ -5,8 +5,8 @@
 #
 type: Vorobox
 properties:
-  randomDensity: 0
-  showMe: 1
+  randomDensity: 100
+  showMe: 1 
 objects:
   square:
     - type: GeometryCollection

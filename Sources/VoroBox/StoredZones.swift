@@ -30,10 +30,8 @@ struct StoredZones : Codable {
   var name:String?
   
   // global properties
-  var properties: Properties?
-  var id:Int?
-  var iteration:Int?
-  
+  var control: Control?
+
   // Arc transform
   var transform: Transform?
   
@@ -43,35 +41,46 @@ struct StoredZones : Codable {
   }
   
   struct Zone: Codable {
-    var name: String?
-
     var origin: Array<Double>?
     var scale: Array<Double>?
+    var type:String?
     
     // Topojson-like description
     var polygon:Array<Array<Int>>?
     var multipolygon:Array<Array<Array<Int>>>?
+
+    // Explict points
     var point:Array<Double>?
     var multipoint:Array<Array<Double>>?
+
+    // Points to add randomly
+    var random:Int?
+    var multirandom:Array<Int>?
     
     // Properties associated with the zone
     var properties: Properties?
+    var multiproperties: Array<Properties>?
   }
   
   struct Properties: Codable {
     // Zone properties
     var randomDensity:Double?
-    var id:Int?
-    var distinct:Bool?
-
-    // debugging control
-    var showMe:Int?
+    var name:String?
   }
 
   struct Transform: Codable {
     // Arc transformations
     var scale:Array<Double>?
     var translate:Array<Double>?
+  }
+
+  struct Control: Codable {
+    var id:Int?
+    var iteration:Int?
+    var distinct:Bool?
+
+    // debugging control
+    var showMe:Int?
   }
 }
 
