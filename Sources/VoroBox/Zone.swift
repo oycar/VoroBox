@@ -366,26 +366,26 @@ extension Zone {
 
             // Do we need to check other arcs?
             if beforeIndex > 0 {
-              // Nested function to check a completed arc list 
-              func check(arcs boundary:Array<Int>, for point:Array<Double>) -> Int {
-                for b in boundary {
-                  // This is a list of arc indices
-                  // Each arc is indexed by b                  
-                  // Get the arc index (ones complement for negative numbers)
-                  let boundaryIndex = b < 0 ? ~b : b
+              // // Nested function to check a completed arc list 
+              // func check(arcs boundary:Array<Int>, for point:Array<Double>) -> Int {
+              //   for b in boundary {
+              //     // This is a list of arc indices
+              //     // Each arc is indexed by b                  
+              //     // Get the arc index (ones complement for negative numbers)
+              //     let boundaryIndex = b < 0 ? ~b : b
                   
-                  //  This arc is recorded already
-                  let vertexList = Zone.arcVertices[boundaryIndex]
+              //     //  This arc is recorded already
+              //     let vertexList = Zone.arcVertices[boundaryIndex]
                     
-                  // Is the point in the boundary?
-                  if let vertexIndex = arcs[boundaryIndex].firstIndex(of: point) {
-                    return vertexList[vertexIndex]
-                  }
-                }
+              //     // Is the point in the boundary?
+              //     if let vertexIndex = arcs[boundaryIndex].firstIndex(of: point) {
+              //       return vertexList[vertexIndex]
+              //     }
+              //   }
 
-                // Not found
-                return EmptyVertex
-              }
+              //   // Not found
+              //   return EmptyVertex
+              // }
 
               // Yes 
               for i in 0..<beforeIndex {
@@ -393,11 +393,27 @@ extension Zone {
                 let boundaryArcs = multipolygons[i].first!
 
                 // Does p exist on these arcs?
-                let v = check(arcs:boundaryArcs, for:p)
-                if v != EmptyVertex {
-                  Zone.arcVertices[arcIndex].append(v)
-                  continue roundList
+                for b in boundaryArcs {
+                  // This is a list of arc indices
+                  // Each arc is indexed by b                  
+                  // Get the arc index (ones complement for negative numbers)
+                  let boundaryIndex = b < 0 ? ~b : b
+                  
+                  //  This arc is recorded already
+                  //let vertexList = Zone.arcVertices[boundaryIndex]
+                    
+                  // Is the point in the boundary?
+                  if let vertexIndex = arcs[boundaryIndex].firstIndex(of: p) {
+                    Zone.arcVertices[arcIndex].append(Zone.arcVertices[boundaryIndex][vertexIndex])
+                    continue roundList
+                  }
                 }
+
+                // let v = check(arcs:boundaryArcs, for:p)
+                // if v != EmptyVertex {
+                //   Zone.arcVertices[arcIndex].append(v)
+                //   continue roundList
+                // }
               }
             }
             
@@ -461,7 +477,7 @@ extension Zone {
     let polygons = multipolygons[polyIndex]
 
     // For boundary arcs need to consider all the
-    // earlier boudnry arcs in checking for
+    // earlier boundary arcs in checking for
     // duplicated vertices
     var polygon = polyFrom(arcs: polygons.first!, check: polyIndex)
      
