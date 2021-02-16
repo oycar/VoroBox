@@ -26,6 +26,8 @@ struct StoredZones : Codable {
   var type:String
   var objects: Dictionary<String, Array<GeometryCollection>>
   var arcs: Array<Array<Array<Double>>>
+  var properties: Array<Properties>?
+
   var conformingTo:String?
   var name:String?
   
@@ -52,20 +54,10 @@ struct StoredZones : Codable {
     // Explict points
     var point:Array<Double>?
     var multipoint:Array<Array<Double>>?
-
-    // Points to add randomly
-    var random:Int?
-    var multirandom:Array<Int>?
     
     // Properties associated with the zone
-    var properties: Properties?
-    var multiproperties: Array<Properties>?
-  }
-  
-  struct Properties: Codable {
-    // Zone properties
-    var randomDensity:Double?
-    var name:String?
+    var properties: Int?
+    var multiproperties: Array<Int>?
   }
 
   struct Transform: Codable {

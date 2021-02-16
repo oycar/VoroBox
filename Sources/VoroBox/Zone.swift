@@ -24,17 +24,11 @@ import Foundation
 // Properties
 struct Properties: Codable {
   // Zone properties
-  var randomDensity:Double?
-}
-
-extension Properties {
-  init(with density:Double? = nil) {
-    randomDensity = density
-  }
+  var density:Double = 1
+  var name:String?
 }
 
 // Control 
-// Properties
 struct Control: Codable {
   // Zone properties
   var id:Int = FirstZone
@@ -69,6 +63,9 @@ struct Zone: Codable {
       
   // Arc vertices (when using topojson style zone files)
   static var arcVertices = Array<Array<Int>>()
+
+  // Zone properties 
+  static var propertyList = Array<Properties>()
   
   // Global properties
   static var control:Control = Control()
@@ -93,11 +90,12 @@ struct Zone: Codable {
   // Each zone can have zero or more holes
   var holeIndices = Array<Array<Int>>()
     
-  // A codde which identifies whether a zone is delaunay or voronoi conforming
+  // A code which identifies whether a zone is delaunay or voronoi conforming
+  // This is deprecated
   var code: Int = 1
 
-  // Control of point insertion
-  var properties: Properties?
+  // Index to find the properties associated with this zone
+  var propertyIndex: Int = 0
 }
 
 // The actual zone structure ...
@@ -122,28 +120,59 @@ extension Zone {
     // Make space for the arcs
     Zone.arcVertices = Array(repeating: [], count: arcs.count)
     
-    // Initially we are reading the stored data, which can define
-    // a reflex polygon - so we need to create a collection
-    // of convex zones
+    // Initially we are reading the stored data
+    // // Link properties to zones 
+    // if let p = stored.properties {
+    //   Zone.propertyList.append(Properties(from: p))
+    // } else if let list = stored.multiproperties {
+    //   for p in list {
+    //    Zone.propertyList.append(Properties(from: p))
+    //   }
+    // }
         
     // We are given the co-ordinates
     // Only  the first array is needed to construct the boundary
     //
     // This might be a multi-part zone
-    
-   if let polygons = stored.polygon {
+    // Properties are always noted for every zone 
+    var propertyIndex = Zone.propertyList.count
+    if let polygons = stored.polygon {
       // Make polygons arrays of vertices
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
       
-      // Define a zone using a polygon
+      // // Define a zone using a polygon
+      // if let p  = stored.properties {
+      //   Zone.propertyList.append(Properties(from: p))
+      // } else {
+      //   // Empty properties
+      //   Zone.propertyList.append(Properties())
+      // }
       inputZones.append(Zone(copy: self, using: [polygons], index: 0, and: arcs, data: stored))
     } else if let multipolygons = stored.multipolygon {
+      // // Link the properties 
+      // if let list = stored.multiproperties {
+      //   if list.count != multipolygons.count {
+      //     throw triangulationError.initError("MultiProperties list length \(list.count) does not match the multipolygon list length \(multipolygons.count)")
+      //   }
+
+      //   for p in list {
+      //    Zone.propertyList.append(Properties(from: p))
+      //   }
+      // } else {
+      //    Zone.propertyList.append(Properties(from: p))
+      // }
+
       // This is quite straightforward now
       for i in 0..<multipolygons.count {
         inputZones.append(Zone(copy: self, using: multipolygons, index: i, and: arcs, data: stored))
       }
+
+
     }
     
+    // Save the properties 
+
+
     // Explicitly specified points
     var specifiedPoints = Array<Array<Double>>()
     if let point = stored.point {
@@ -411,8 +440,10 @@ extension Zone {
     
     // Add a zone defined by a polygon
     code = zone.code
-    properties = zone.properties
-    
+
+    // This adds the pointer to one more property 
+    propertyIndex = Zone.propertyList.count + polyIndex
+  
     // Zone scale (mapped by global scale if reqired)
     // Zones can be referred to a specific origin
     if let o = stored.origin {
@@ -470,7 +501,7 @@ extension Zone {
     code = zone.code
     
     // Needed for initialization
-    properties = zone.properties
+    propertyIndex = zone.propertyIndex
     
     // Copy the perimeter
     // This always relates to the parent instance
@@ -1082,6 +1113,9 @@ func triangulateZones(using storedData:StoredZones) throws {
   
   // Get the arcs (must be present)
   var arcs = storedData.arcs
+
+  // And the properties (providing a default if none defined)
+  let properties:Array<Properties> = storedData.properties ?? [Properties()] 
   
   // Get the transform
   if let transform = storedData.transform {
