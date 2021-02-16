@@ -155,11 +155,11 @@ extension Zone {
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
       
       // Define a zone using a polygon
-      inputZones.append(Zone(copy: self, using: polygons, and: arcs, data: stored))
+      inputZones.append(Zone(copy: self, using: [polygons], index: 0, and: arcs, data: stored))
     } else if let multipolygons = stored.multipolygon {
       // This is quite straightforward now
-      for polygons in multipolygons {
-        inputZones.append(Zone(copy: self, using: polygons, and: arcs, data: stored))
+      for i in 0..<multipolygons.count {
+        inputZones.append(Zone(copy: self, using: multipolygons, index: i, and: arcs, data: stored))
       }
     }
     
@@ -317,19 +317,23 @@ extension Zone {
   
   
   // This copies a zone but replaces the boundary with the specified arcs
-  init(copy zone: Zone, using polygons:Array<Array<Int>>,
+  init(copy zone: Zone, using multipolygons:Array<Array<Array<Int>>>, index polyIndex:Int,
        and arcs:Array<Array<Array<Double>>>,
        data stored: StoredZones.Zone) {
-    func polyFrom(arcs list:Array<Int>) -> Array<Int> {
+    func polyFrom(arcs arcList:Array<Int>, check beforeIndex:Int = 0) -> Array<Int> {
       // Passed in an array listing the arcs to be used
       // This is used to (i) construct the polygon of vertices
       // and (ii) - as a side effect - store the vertices for future use
       // The lists of vertices that defines the polygon,
       // first list is the
       var polyVertices = Array<Int>()
+
+      // Some arcs (boundary arcs in multipolygons) also need
+      // to check other earlier boundary arcs in the multipolygon
+      // in order to establish if there are duplicated points
       
       // Get each arc in turn
-      for a in list {
+      for a in arcList {
         // This is a list of arc indices
         // Each arc is indexed by a
         // Is this arc read in reverse order?
@@ -337,12 +341,9 @@ extension Zone {
         
         // Get the arc index (ones complement for negative numbers)
         let arcIndex = reverse ? ~a : a
-        
-        // Is this arc already recorded?
-        var vertexArc = Zone.arcVertices[arcIndex]
-                  
+                          
         // If this arc was examined before the vertices will be listed already
-        if vertexArc.isEmpty {
+        if Zone.arcVertices[arcIndex].isEmpty {
           // The arc is itself a list of points
           // The last point in each arc is the same as the first in the next arc
           // Generate the vertices
@@ -357,12 +358,44 @@ extension Zone {
               // Is this a matching point?
               // A duplicated point must be in the same arc
               // Get each earlier point in this arc
-              for i in 0..<k {
-                // The input point q
-                let q = inputArc[i]
-                if q == p {
-                  // The same point
-                  vertexArc.append(vertexArc[i])
+              if let vertexIndex = inputArc[0...(k-1)].firstIndex(of: p) {
+                Zone.arcVertices[arcIndex].append(Zone.arcVertices[arcIndex][vertexIndex])
+                continue roundList
+              }
+            }
+
+            // Do we need to check other arcs?
+            if beforeIndex > 0 {
+              // Nested function to check a completed arc list 
+              func check(arcs boundary:Array<Int>, for point:Array<Double>) -> Int {
+                for b in boundary {
+                  // This is a list of arc indices
+                  // Each arc is indexed by b                  
+                  // Get the arc index (ones complement for negative numbers)
+                  let boundaryIndex = b < 0 ? ~b : b
+                  
+                  //  This arc is recorded already
+                  let vertexList = Zone.arcVertices[boundaryIndex]
+                    
+                  // Is the point in the boundary?
+                  if let vertexIndex = arcs[boundaryIndex].firstIndex(of: point) {
+                    return vertexList[vertexIndex]
+                  }
+                }
+
+                // Not found
+                return EmptyVertex
+              }
+
+              // Yes 
+              for i in 0..<beforeIndex {
+                // The polygon boundaries to check 
+                let boundaryArcs = multipolygons[i].first!
+
+                // Does p exist on these arcs?
+                let v = check(arcs:boundaryArcs, for:p)
+                if v != EmptyVertex {
+                  Zone.arcVertices[arcIndex].append(v)
                   continue roundList
                 }
               }
@@ -381,7 +414,7 @@ extension Zone {
             Triangulation.code.append(NoZoneCode)
             
             // Save the vertex
-            vertexArc.append(Triangulation.pointCount)
+            Zone.arcVertices[arcIndex].append(Triangulation.pointCount)
             Triangulation.pointCount += 1
           } // End of each list
         }
@@ -390,9 +423,9 @@ extension Zone {
         // In building the polygon loops
         // note that the last & first vertices overlap
         if reverse {
-          polyVertices.append(contentsOf: vertexArc.reversed())
+          polyVertices.append(contentsOf: Zone.arcVertices[arcIndex].reversed())
         } else {
-          polyVertices.append(contentsOf: vertexArc)
+          polyVertices.append(contentsOf: Zone.arcVertices[arcIndex])
         }
         
         // Drop the last vertex
@@ -402,7 +435,6 @@ extension Zone {
       // Return the list of vertices
       return polyVertices
     }
-    
     
     // Add a zone defined by a polygon
     name = zone.name
@@ -426,9 +458,12 @@ extension Zone {
 
     //
     // Use arcs to define points
-    // Get the first boundary - so polygons is Array<Array<Int>>
-    //                             each polygon Array<Array<Int>>
-    var polygon = polyFrom(arcs: polygons.first!)
+    let polygons = multipolygons[polyIndex]
+
+    // For boundary arcs need to consider all the
+    // earlier boudnry arcs in checking for
+    // duplicated vertices
+    var polygon = polyFrom(arcs: polygons.first!, check: polyIndex)
      
     // Check ordering - boundaries should be anticlockwise
     if isClockwise(polygon) { polygon.reverse() }
