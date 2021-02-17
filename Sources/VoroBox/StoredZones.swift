@@ -58,22 +58,10 @@ struct StoredZones : Codable {
     // Properties associated with the zone
     var properties: Int?
     var multiproperties: Array<Int>?
+
+    var transform: Transform?
   }
 
-  struct Transform: Codable {
-    // Arc transformations
-    var scale:Array<Double>?
-    var translate:Array<Double>?
-  }
-
-  struct Control: Codable {
-    var id:Int?
-    var iteration:Int?
-    var distinct:Bool?
-
-    // debugging control
-    var showMe:Int?
-  }
 }
 
 

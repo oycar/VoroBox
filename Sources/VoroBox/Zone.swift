@@ -24,26 +24,23 @@ import Foundation
 // Properties
 struct Properties: Codable {
   // Zone properties
-  var density:Double = 1
+  var density:Double = 0
   var name:String?
 }
 
 // Control 
 struct Control: Codable {
-  // Zone properties
-  var id:Int = FirstZone
-  var iteration:Int = 0
-  var distinct:Bool = true
-  var showMe:Int = 0
+  var distinct:Bool? = true
+  var id:Int? = FirstZone
+  var iteration:Int? = 0
+  var showMe:Int? = 0
 }
 
-extension Control {
-  init(from c:StoredZones.Control) {
-    id = c.id ?? FirstZone
-    distinct = c.distinct ?? true
-    showMe = c.showMe ?? 0
-    iteration = c.iteration ?? 0
-  }
+
+struct Transform: Codable {
+  // Arc transformations
+  var scale:Array<Double> = [1, 1]
+  var translate:Array<Double> = [0, 0]
 }
 
 enum zoneError: Error {
@@ -69,12 +66,14 @@ struct Zone: Codable {
   
   // Global properties
   static var control:Control = Control()
-  static var origin:Array<Double> = [0, 0]
-  static var scale:Array<Double> = [1, 1]
+  //static var origin:Array<Double> = [0, 0]
+  //static var scale:Array<Double> = [1, 1]
+  static var transform = Transform()
   
   // Instance properties
-  var origin:Array<Double> = [0, 0]
-  var scale:Array<Double> = [1, 1]
+  var transform = Transform()
+  //var origin:Array<Double> = [0, 0]
+  //var scale:Array<Double> = [1, 1]
 
   // The polygon bounding the zone
   // along with its size
@@ -95,7 +94,7 @@ struct Zone: Codable {
   var code: Int = 1
 
   // Index to find the properties associated with this zone
-  var propertyIndex: Int = 0
+  var propertyIndex: Int = -1
 }
 
 // The actual zone structure ...
@@ -106,72 +105,67 @@ extension Zone {
     
     // Global controls 
     var distinct = Zone.hullConforming ?? true
-    showMe = Zone.control.showMe 
+    showMe = Zone.control.showMe! 
     
     // Set the zone code
-    code = 2 * Zone.control.id
+    code = 2 * Zone.control.id!
 
     // Update the code depending on if this zone is distinct or not
     if distinct { code += 1 } // Code is odd for conforming edges
     
     // Set code - when even the zone is Voronoi conforming (the default)
-    Zone.control.id += 1
-    
+    Zone.control.id! += 1
+
+    // Each zone can apply a co-ordinate tranformation 
+    if let t = stored.transform {
+      let s = Zone.transform.scale
+      transform = Transform(scale: [t.scale[0] * s[0], t.scale[1] * s[1]], translate: [t.translate[0] * s[0], t.translate[1] * s[1]])
+    } 
+
     // Make space for the arcs
     Zone.arcVertices = Array(repeating: [], count: arcs.count)
     
-    // Initially we are reading the stored data
-    // // Link properties to zones 
-    // if let p = stored.properties {
-    //   Zone.propertyList.append(Properties(from: p))
-    // } else if let list = stored.multiproperties {
-    //   for p in list {
-    //    Zone.propertyList.append(Properties(from: p))
-    //   }
-    // }
+    // The added zones need to be associated with properties 
+    // Either the default zone, or a single shared zone or a distinct zone for each one 
+    // First identify the properties 
+    var propertyIndices = Array<Int>() 
+    if let p = stored.multiproperties {
+      propertyIndices = p
+    } else {
+      // Set the properties
+      // Use default value if none specified
+      let p = nil != stored.properties ? stored.properties! : 0
+      propertyIndices.append(p)
+    }
         
     // We are given the co-ordinates
     // Only  the first array is needed to construct the boundary
     //
-    // This might be a multi-part zone
-    // Properties are always noted for every zone 
-    var propertyIndex = Zone.propertyList.count
     if let polygons = stored.polygon {
       // Make polygons arrays of vertices
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
       
-      // // Define a zone using a polygon
-      // if let p  = stored.properties {
-      //   Zone.propertyList.append(Properties(from: p))
-      // } else {
-      //   // Empty properties
-      //   Zone.propertyList.append(Properties())
-      // }
+      // Just one property index is important
+      propertyIndex = propertyIndices[0]
       inputZones.append(Zone(copy: self, using: [polygons], index: 0, and: arcs, data: stored))
     } else if let multipolygons = stored.multipolygon {
-      // // Link the properties 
-      // if let list = stored.multiproperties {
-      //   if list.count != multipolygons.count {
-      //     throw triangulationError.initError("MultiProperties list length \(list.count) does not match the multipolygon list length \(multipolygons.count)")
-      //   }
-
-      //   for p in list {
-      //    Zone.propertyList.append(Properties(from: p))
-      //   }
-      // } else {
-      //    Zone.propertyList.append(Properties(from: p))
-      // }
-
       // This is quite straightforward now
       for i in 0..<multipolygons.count {
+        // Either the zones share the same property index or they have one each
+        if propertyIndices.count == multipolygons.count {
+          propertyIndex = propertyIndices[i]
+        } else if propertyIndices.count == 1 {
+          propertyIndex = propertyIndices[0]
+        } else {
+          // An input file error 
+          throw zoneError.initError("Number of multipolygons \(multipolygons.count) doesn't match number of multiproperties \(propertyIndices.count)")
+        }
+
+        // Obtain convex zones from the input zones
         inputZones.append(Zone(copy: self, using: multipolygons, index: i, and: arcs, data: stored))
       }
 
-
     }
-    
-    // Save the properties 
-
 
     // Explicitly specified points
     var specifiedPoints = Array<Array<Double>>()
@@ -289,17 +283,17 @@ extension Zone {
     // Update zone count
     Triangulation.pointCount = Triangulation.coords.count / 2
 
-    // This is a clumsy make do
+    // Use the linked properties 
+    let properties = Zone.propertyList[propertyIndex]
+
     // Can be replaced once other components working
-    let density:Double = Double.random(in: 0...100)
+    let density = properties.density 
     
     // Number of points is density times box area
-    var r:Double = density * (maxX - minX) * (maxY - minY)
-    r.round(.up)
+    var n = 1 + Int(density * (maxX - minX) * (maxY - minY))
       
     // Add the points
-    var ii = Int(r)
-    nextRandomPoint: while ii > 0 {
+    nextRandomPoint: while n > 0 {
       // Add points inside  the zone
       let x = Double.random(in: minX...maxX), y = Double.random(in: minY...maxY)
       
@@ -324,8 +318,11 @@ extension Zone {
         zoneIndices.append(Triangulation.pointCount)
         Triangulation.pointCount += 1
 
-        ii -= 1
+        //n -= 1
       }
+
+      // Reduce counter unconditionally 
+      n -= 1
     } // Add random points
     
     return newList
@@ -406,7 +403,7 @@ extension Zone {
             // A new point if none found -
             // Transform the point p
             for j in 0...1 {
-              p[j] = origin[j] + scale[j] * p[j]
+              p[j] = transform.translate[j] + transform.scale[j] * p[j]
             }
             
             // Save this point
@@ -441,23 +438,8 @@ extension Zone {
     // Add a zone defined by a polygon
     code = zone.code
 
-    // This adds the pointer to one more property 
-    propertyIndex = Zone.propertyList.count + polyIndex
-  
-    // Zone scale (mapped by global scale if reqired)
-    // Zones can be referred to a specific origin
-    if let o = stored.origin {
-      origin  = [o[0] * Zone.scale[0], o[1] * Zone.scale[1]]
-    } else {
-      origin  = Zone.origin
-    }
-    
-    // And a scale factor can be applied
-    if let s = stored.scale {
-      scale  = [s[0] * Zone.scale[0], s[1] * Zone.scale[1]]
-    } else {
-      scale  = Zone.scale
-    }
+    // The property index is inherited
+    propertyIndex = zone.propertyIndex
 
     //
     // Use arcs to define points
@@ -1101,9 +1083,7 @@ func triangulateZones(using storedData:StoredZones) throws {
     
   //  Some control settings 
   if let c = storedData.control {
-    Zone.control = Control(from: c)
-  } else {
-    Zone.control = Control()
+    Zone.control = Control(distinct: c.distinct ?? true, id: c.id ?? FirstZone, iteration: c.iteration ?? 0, showMe: c.showMe ?? 0)
   }
   
   // Need to establish a bounding box
@@ -1115,7 +1095,7 @@ func triangulateZones(using storedData:StoredZones) throws {
   var arcs = storedData.arcs
 
   // And the properties (providing a default if none defined)
-  let properties:Array<Properties> = storedData.properties ?? [Properties()] 
+  Zone.propertyList = storedData.properties ?? [Properties()] 
   
   // Get the transform
   if let transform = storedData.transform {
@@ -1134,8 +1114,7 @@ func triangulateZones(using storedData:StoredZones) throws {
     }
     
     // The transform is the global scale
-    Zone.scale = transform.scale!
-    Zone.origin = transform.translate!
+    Zone.transform = transform 
   }
  
   // The objects

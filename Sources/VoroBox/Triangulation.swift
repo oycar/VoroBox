@@ -111,6 +111,7 @@ struct Triangulation: Codable {
   // The count of points, their co-ordinates
   static var coords = Array<Double>()
   static var code = Array<Int>()
+  static var properties = Array<Int>() //  Index of preoperties associated with this vertex
   static var pointCount = 0
   
   // The singleton triangulation
@@ -981,7 +982,7 @@ extension Triangulation {
       } while loopStart != fº
     } // End of each loop
     
-    // Second pass computes the constructor vertices
+    // Third pass computes the constructor vertices
     // Get the vertices used to construct the conforming Voronoi diagram
     // var hubIndex = 0
     if showMe != 0 {
@@ -3449,7 +3450,7 @@ extension Triangulation {
       string += "  id: \(-code)\n"
       // string += "  randomDensity: \(2 * (rho ?? 0))\n"
       string += "  showMe: \(showMe)\n"
-      string += "  iteration: \(Zone.control.iteration + 1)\n"
+      string += "  iteration: \(Zone.control.iteration! + 1)\n"
     }
 
     // Geometry

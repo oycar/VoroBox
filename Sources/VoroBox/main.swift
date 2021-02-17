@@ -35,7 +35,7 @@ do {
 // Write output data
 var filename = "cells_" + Zone.name!
 do {
-  let iteration:Int = Zone.control.iteration + 1
+  let iteration:Int = Zone.control.iteration! + 1
   let folder = try Folder(path: OutputFolder)
   let conforming = Zone.hullConforming ?? true
   
