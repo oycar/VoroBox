@@ -206,11 +206,15 @@ extension Zone {
     // Now we can allocate the points (if any) that are associated with each convex zone
     var newList = Array<Array<Double>>()
     
-    var minX = boundingBox[0][0]
-    var minY = boundingBox[0][1]
-    var maxX = boundingBox[1][0]
-    var maxY = boundingBox[1][1]
-    
+    // var minX = boundingBox[0][0]
+    // var minY = boundingBox[0][1]
+    // var maxX = boundingBox[1][0]
+    // var maxY = boundingBox[1][1]
+    var minX = Double.infinity
+    var minY = Double.infinity
+    var maxX = -Double.infinity
+    var maxY = -Double.infinity
+
     // Add defined points
     nextPoint: for p in pointList {
       // The point
@@ -261,8 +265,7 @@ extension Zone {
     if polygonCount < 2 { return newList}
     
     // Add points defined by a perimeter
-    var i = 1
-    while i < polygonCount {
+    for i in 0..<polygonCount {
       let x = Triangulation.coords[2 * zoneIndices[i]], y = Triangulation.coords[2 * zoneIndices[i] + 1]
       
       // Compute bounds
@@ -270,9 +273,6 @@ extension Zone {
       if (y < minY)  {minY = y}
       if (x > maxX)  {maxX = x}
       if (y > maxY)  {maxY = y}
-      
-      // next point
-      i += 1
     }
     
     // Update the overall bounding box

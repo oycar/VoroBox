@@ -6,12 +6,6 @@
 #
 type: Topology
 name: maltese
-
-# Default global properties
-properties: &globalProperties
-  randomDensity: 100
-  distinct: false
-  showMe: 1
   
 # inverted cross
 
@@ -27,7 +21,8 @@ objects:
         # because we are applying an offset use the multipolygon style
         # This has four distinct regions
         - multipolygon: [[[1]], [[2]], [[3]], [[4]]]
-
+          origin: [4, 0]
+          multiproperties: [1, 2, 3, 4]
 
 arcs: [
  [&a [-2, -2], [2, -2], [2, 2], [-2, 2], *a],
@@ -41,8 +36,9 @@ arcs: [
  &r2 [1.0, 0.0], &r3 [1.70710678118654757,  0.70710678118654757], *o]
 ]
 
-# Introduce quantisation
-transform:
-  scale: [1, 1]
-  translate: [0, 0]
-
+properties: 
+  - density: 1000
+  - density: 10
+  - density: 100
+  - density: 1
+  - density: 10000
