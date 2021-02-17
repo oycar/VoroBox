@@ -59,7 +59,6 @@ struct StoredZones : Codable {
     var properties: Int?
     var multiproperties: Array<Int>?
 
-    var transform: Transform?
   }
 
 }

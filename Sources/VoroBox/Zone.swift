@@ -29,11 +29,10 @@ struct Control: Codable {
   var showMe:Int? = 0
 }
 
-
 struct Transform: Codable {
   // Arc transformations
-  var scale:Array<Double> = [1, 1]
-  var translate:Array<Double> = [0, 0]
+  var scale:Array<Double>? = [1, 1]
+  var translate:Array<Double>? = [0, 0]
 }
 
 enum zoneError: Error {
@@ -59,14 +58,12 @@ struct Zone: Codable {
   
   // Global properties
   static var control:Control = Control()
-  //static var origin:Array<Double> = [0, 0]
-  //static var scale:Array<Double> = [1, 1]
-  static var transform = Transform()
+  static var origin:Array<Double> = [0, 0]
+  static var scale:Array<Double> = [1, 1]
   
   // Instance properties
-  var transform = Transform()
-  //var origin:Array<Double> = [0, 0]
-  //var scale:Array<Double> = [1, 1]
+  var origin:Array<Double> = [0, 0]
+  var scale:Array<Double> = [1, 1]
 
   // The polygon bounding the zone
   // along with its size
@@ -109,11 +106,20 @@ extension Zone {
     // Set code - when even the zone is Voronoi conforming (the default)
     Zone.control.id! += 1
 
-    // Each zone can apply a co-ordinate tranformation 
-    if let t = stored.transform {
-      let s = Zone.transform.scale
-      transform = Transform(scale: [t.scale[0] * s[0], t.scale[1] * s[1]], translate: [t.translate[0] * s[0], t.translate[1] * s[1]])
-    } 
+    // Zone scale (mapped by global scale if reqired)
+    // Zones can be referred to a specific origin
+    if let o = stored.origin {
+      origin  = [o[0] * Zone.scale[0], o[1] * Zone.scale[1]]
+    } else {
+      origin  = Zone.origin
+    }
+    
+    // And a scale factor can be applied
+    if let s = stored.scale {
+      scale  = [s[0] * Zone.scale[0], s[1] * Zone.scale[1]]
+    } else {
+      scale  = Zone.scale
+    }
 
     // Make space for the arcs
     Zone.arcVertices = Array(repeating: [], count: arcs.count)
@@ -434,7 +440,7 @@ extension Zone {
             // A new point if none found -
             // Transform the point p
             for j in 0...1 {
-              p[j] = transform.translate[j] + transform.scale[j] * p[j]
+              p[j] = origin[j] + scale[j] * p[j]
             }
             
             // Save this point
@@ -468,6 +474,10 @@ extension Zone {
       // Return the list of vertices
       return polyVertices
     }
+
+    // Copy scale and origin 
+    scale = zone.scale 
+    origin = zone.origin
     
     // Add a zone defined by a polygon
     code = zone.code
@@ -513,6 +523,10 @@ extension Zone {
     // This generates a triangular zone
     polygonCount = n // Its an n-gon - can be zero
     
+    // Copy scale and origin 
+    scale = zone.scale 
+    origin = zone.origin
+
     // clipped zones inherit parent code
     code = zone.code
     
@@ -1057,7 +1071,8 @@ func triangulateZones(using storedData:StoredZones) throws {
     }
     
     // The transform is the global scale
-    Zone.transform = transform 
+    Zone.scale = transform.scale!
+    Zone.origin = transform.translate! 
   }
  
   // The objects
