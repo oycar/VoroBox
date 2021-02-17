@@ -147,7 +147,7 @@ extension Zone {
       
       // Just one property index is important
       propertyIndex = propertyIndices[0]
-      inputZones.append(Zone(copy: self, using: [polygons], index: 0, and: arcs, data: stored))
+      inputZones.append(Zone(copy: self, using: [polygons], index: 0, and: arcs))
     } else if let multipolygons = stored.multipolygon {
       // This is quite straightforward now
       for i in 0..<multipolygons.count {
@@ -162,7 +162,7 @@ extension Zone {
         }
 
         // Obtain convex zones from the input zones
-        inputZones.append(Zone(copy: self, using: multipolygons, index: i, and: arcs, data: stored))
+        inputZones.append(Zone(copy: self, using: multipolygons, index: i, and: arcs))
       }
 
     }
@@ -196,7 +196,6 @@ extension Zone {
       
       // The final convex zone is simply z
       convexZones.append(contentsOf: z.convexZones)
-      //convexZones.append(z)
       
       if showMe > 0 {
         print("Added \(convexZones.count) convex zones")
@@ -232,8 +231,12 @@ extension Zone {
         // Add it to the coordinate list
         Triangulation.coords.append(x)
         Triangulation.coords.append(y)
-        
-        // These are given a zone code
+
+        // Properties 
+        Triangulation.properties.append(propertyIndex)
+
+        // This needs the zone code
+        // Deprecated
         Triangulation.code.append(code)
         
         // Yes this point is inside this zone
@@ -311,7 +314,11 @@ extension Zone {
         Triangulation.coords.append(x)
         Triangulation.coords.append(y)
         
+        // Properties 
+        Triangulation.properties.append(propertyIndex)
+
         // This needs the zone code
+        // Deprecated
         Triangulation.code.append(code)
         
         // Set zone index
@@ -331,8 +338,7 @@ extension Zone {
   
   // This copies a zone but replaces the boundary with the specified arcs
   init(copy zone: Zone, using multipolygons:Array<Array<Array<Int>>>, index polyIndex:Int,
-       and arcs:Array<Array<Array<Double>>>,
-       data stored: StoredZones.Zone) {
+       and arcs:Array<Array<Array<Double>>>) {
     func polyFrom(arcs arcList:Array<Int>, check beforeIndex:Int = 0) -> Array<Int> {
       // Passed in an array listing the arcs to be used
       // This is used to (i) construct the polygon of vertices
@@ -372,7 +378,13 @@ extension Zone {
               // A duplicated point must be in the same arc
               // Get each earlier point in this arc
               if let vertexIndex = inputArc[0...(k-1)].firstIndex(of: p) {
-                Zone.arcVertices[arcIndex].append(Zone.arcVertices[arcIndex][vertexIndex])
+                // A duplicated point - may need to blend properties 
+                let v = Zone.arcVertices[arcIndex][vertexIndex]
+                
+                // 
+
+
+                Zone.arcVertices[arcIndex].append(v)
                 continue roundList
               }
             }
@@ -393,7 +405,10 @@ extension Zone {
                   
                   // Is the point in the boundary?
                   if let vertexIndex = arcs[boundaryIndex].firstIndex(of: p) {
-                    Zone.arcVertices[arcIndex].append(Zone.arcVertices[boundaryIndex][vertexIndex])
+                    // A duplicated point - may need to blend properties 
+                    let v = Zone.arcVertices[arcIndex][vertexIndex]
+
+                    Zone.arcVertices[arcIndex].append(v)
                     continue roundList
                   }
                 }
@@ -410,6 +425,9 @@ extension Zone {
             Triangulation.coords.append(contentsOf: p)
             
             // Use the zone properties
+            Triangulation.properties.append(propertyIndex)
+
+            // Deprecated
             Triangulation.code.append(NoZoneCode)
             
             // Save the vertex
@@ -514,97 +532,6 @@ extension Zone {
     // The final convex zone is simply self
     convexZones.append(self)
   }
-  
-//  mutating func addPointsToZone(_ pointList: Array<Int>) -> Array<Int> {
-//    // Now we can allocate the points (if any) that are associated with each convex zone
-//    var newList = Array<Int>()
-//
-//    // Add defined points
-//    nextPoint: for i in pointList {
-//      // Do we have an unattached specified point?
-//      let x = Triangulation.coords[2 * i], y = Triangulation.coords[2 * i + 1]
-//
-//      // Is this inside this zone?
-//      if polygonCount == 0 || isInside(boundary:zoneIndices, size: polygonCount, query_x: x, query_y: y) {
-//        // Exclude points that are inside any hole
-//        for h in holeIndices {
-//          if isInside(boundary: h.reversed(), size: h.count, query_x: x, query_y: y) {
-//            // Inside a hole
-//            continue nextPoint
-//          }
-//        }
-//
-//        // Yes this point is inside this zone
-//        zoneIndices.append(i)
-//
-//        // Can only be in one zone
-//      } else {
-//        newList.append(i)
-//      }
-//    }
-//
-//    // All done if no perimeter or bounding box
-//    if polygonCount < 2 { return newList}
-//
-//    // Add points defined by a perimter
-//    var i = 1
-//    var minX = Triangulation.coords[2 * zoneIndices[0]]
-//    var minY = Triangulation.coords[2 * zoneIndices[0] + 1]
-//    var maxX = minX
-//    var maxY = minY
-//
-//    while i < polygonCount {
-//      let x = Triangulation.coords[2 * zoneIndices[i]], y = Triangulation.coords[2 * zoneIndices[i] + 1]
-//
-//      // Compute bounds
-//      if (x < minX)  {minX = x}
-//      if (y < minY)  {minY = y}
-//      if (x > maxX)  {maxX = x}
-//      if (y > maxY)  {maxY = y}
-//
-//      // next point
-//      i += 1
-//    }
-//
-//    // Now add random points
-//    // Update zone count
-//    Triangulation.pointCount = Triangulation.coords.count / 2
-//    if let density:Double = properties!.randomDensity {
-//      // Number of points is density times box area
-//      var r:Double = density * (maxX - minX) * (maxY - minY)
-//      r.round(.up)
-//
-//      // Add the points
-//      nextRandomPoint: for _ in 0..<Int(r) {
-//        // Add points inside  the zone
-//        let x = Double.random(in: minX...maxX), y = Double.random(in: minY...maxY)
-//
-//        // Append the point
-//        if isInside(boundary: zoneIndices, size: polygonCount, query_x: x, query_y: y) {
-//          // Skip any inside a hole
-//          for h in holeIndices {
-//            if isInside(boundary: h.reversed(), size: h.count, query_x: x, query_y: y) {
-//              // Inside a hole
-//              continue nextRandomPoint
-//            }
-//          }
-//
-//          // New point - set coordinates
-//          Triangulation.coords.append(x)
-//          Triangulation.coords.append(y)
-//
-//          // This needs the zone code
-//          Triangulation.code.append(code)
-//
-//          // Set zone index
-//          zoneIndices.append(Triangulation.pointCount)
-//          Triangulation.pointCount += 1
-//        }
-//      }
-//    } // Add random points
-//
-//    return newList
-//  }
   
   // Extra geometric primitives for zones
   // Clip the zone

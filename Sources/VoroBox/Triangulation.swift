@@ -1063,6 +1063,9 @@ extension Triangulation {
         // The generator point is noted
         Triangulation.coords.append(dx)
         Triangulation.coords.append(dy)
+
+        // Sentinels pick up generator codes 
+        Triangulation.properties.append(Triangulation.properties[h])
         
         // Generator points have the local code
         Triangulation.code.append(zCode)
@@ -1103,6 +1106,9 @@ extension Triangulation {
           let d_in  = reflect(dx, dy, gx, gy, hx, hy)
           
           // The properties of h are copied - twice
+          Triangulation.properties.append(Triangulation.properties[h])
+          Triangulation.properties.append(Triangulation.properties[h])
+
           Triangulation.code.append(zCode)
           Triangulation.code.append(zCode)
           
@@ -1135,6 +1141,7 @@ extension Triangulation {
           // Colinear point
           
           // The properties of h are copied - once
+          Triangulation.properties.append(Triangulation.properties[h])
           Triangulation.code.append(zCode)
           
           // Internal generator same as on a convex corner
@@ -1178,7 +1185,7 @@ extension Triangulation {
     var countHubs = 0, hubThreshold = hubStep
     if showMe > 0 {
       print("Pass 4")
-      print("\tFold Out Hub Corners")
+      print("\tFold out hubs")
       showVoronoi(label: "fo_", type: "Delaunay")
     }
     
@@ -2043,6 +2050,7 @@ extension Triangulation {
             let vº = reflect(vx, vy, hx, hy, jx, jy)
             
             // The local edge code
+            Triangulation.properties.append(Triangulation.properties[v])
             Triangulation.code.append(zCode)
             growTriangulation(to: Triangulation.pointCount)
             
@@ -3429,10 +3437,10 @@ extension Triangulation {
     // cell data
     vtkString += String(format: "\nCELL_DATA %04d", zoneList.count)
     
-    vtkString += "\nSCALARS properties int 1"
+    vtkString += "\nSCALARS properties double 1"
     vtkString += "\nLOOKUP_TABLE default"
     for (_, v) in zoneVertex.enumerated() {
-      let z = Triangulation.code[v]
+      let z = Zone.propertyList[Triangulation.properties[v]].density
       vtkString += "\n\(z)"
     }
     
