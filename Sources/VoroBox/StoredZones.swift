@@ -64,4 +64,20 @@ struct StoredZones : Codable {
 
 }
 
+// Properties
+struct Properties: Codable {
+  // Zone properties
+  var density:Double = 0
+}
 
+func mingleProperties(_ p:Int, _ q:Int) -> Int {
+  // Create a new mingled properties value 
+  let pd = Zone.propertyList[p].density,  qd = Zone.propertyList[q].density
+
+  // Save the properties 
+  //Zone.propertyList.append(Properties(density: (pd * qd).squareRoot()))
+  Zone.propertyList.append(Properties(density: 0.5 * (pd + qd)))
+
+  // Return the index 
+  return Zone.propertyList.count - 1
+}

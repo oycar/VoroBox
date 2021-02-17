@@ -21,13 +21,6 @@
 //
 import Foundation
 
-// Properties
-struct Properties: Codable {
-  // Zone properties
-  var density:Double = 0
-  var name:String?
-}
-
 // Control 
 struct Control: Codable {
   var distinct:Bool? = true
@@ -381,7 +374,18 @@ extension Zone {
                 // A duplicated point - may need to blend properties 
                 let v = Zone.arcVertices[arcIndex][vertexIndex]
                 
-                // 
+                // What properties are associated with this point 
+                // Even though on the same arc it might 
+                // have mingled with another vertex previously 
+                let otherIndex = Triangulation.properties[v]
+                if otherIndex != propertyIndex {
+                  // Need to adjust the properties here 
+                  let newIndex = mingleProperties(propertyIndex, otherIndex)
+                  
+                  // Update the properties 
+                  Triangulation.properties[v] = newIndex
+                }
+
 
 
                 Zone.arcVertices[arcIndex].append(v)
@@ -406,7 +410,19 @@ extension Zone {
                   // Is the point in the boundary?
                   if let vertexIndex = arcs[boundaryIndex].firstIndex(of: p) {
                     // A duplicated point - may need to blend properties 
-                    let v = Zone.arcVertices[arcIndex][vertexIndex]
+                    let v = Zone.arcVertices[boundaryIndex][vertexIndex]
+
+                    // What properties are associated with this point 
+                    // Even though on the same arc it might 
+                    // have mingled with another vertex previously 
+                    let otherIndex = Triangulation.properties[v]
+                    if otherIndex != propertyIndex {
+                      // Need to adjust the properties here 
+                      let newIndex = mingleProperties(propertyIndex, otherIndex)
+                  
+                      // Update the properties 
+                      Triangulation.properties[v] = newIndex
+                    }
 
                     Zone.arcVertices[arcIndex].append(v)
                     continue roundList
