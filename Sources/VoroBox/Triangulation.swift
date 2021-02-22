@@ -79,6 +79,7 @@ internal let ProjectFolder = ProcessInfo.processInfo.environment["HOME"]!  + "/C
 internal let ZoneFolder = ProjectFolder + "/Zones"
 internal let OutputFolder = ProjectFolder + "/Output"
 internal var showCount = 0
+internal let showLimit = 40
 
 // The edge boundary flag we can use a few small negative integers
 internal let FirstZone = 16 // No zone will have an ID less than this
@@ -590,10 +591,10 @@ extension Triangulation {
     
     // Not empty
     if convexNext.isEmpty { return }
-    if showMe > 1  {
-      print("Join Hulls")
-      showVoronoi(label: "jl_", type: "Delaunay")
-    }
+    //if showMe > 1  {
+      //print("Join Hulls")
+      //showVoronoi(label: "jl_", type: "Delaunay")
+    //}
     
     // Save any matched edges
     var matchedEdges = Dictionary<Int, Int>()
@@ -766,7 +767,7 @@ extension Triangulation {
     var index = 0
     var hookIndex = 0
     while !hullEdges.isEmpty {
-      // When reproducible is set get the vertex with the minimum value of x
+      // When reproducible is set get the vertex with ab extremum value of x
       var loopStart:Int
       
       // Only do this when debugging
@@ -779,11 +780,11 @@ extension Triangulation {
           if ax == bx {
             let ay = Triangulation.coords[2 * a + 1]
             let by = Triangulation.coords[2 * b + 1]
-            return ay <= by
+            return ay >= by
           }
         
           // Get the relative orientation
-          return ax < bx
+          return ax > bx
         }
         let y = x.first!.key
         
@@ -823,7 +824,7 @@ extension Triangulation {
     if showMe != 0 {
       print("Pass 2")
       print("\tFind hub generators")
-      showVoronoi(label: "fh_")
+      showVoronoi(label: "fh_", type: "Delaunay")
     }
     
     // Get each hull loop
@@ -1202,6 +1203,7 @@ extension Triangulation {
     // Need to update the loopHooks again!
     loopHooks = Triangulation.loopHooks
     Triangulation.loopHooks.removeAll(keepingCapacity: true)
+    let saveMe = showMe
     
     // Each loop hook must be obtained in the correct order...
     for (key, j) in loopHooks {
@@ -1229,10 +1231,16 @@ extension Triangulation {
         iº += 1
         
         // debugging
+        if 4448 == list[hIndex] { 
+          showMe = 3
+        } else if list[hIndex] < 4446 {
+          showMe = saveMe
+        }
 
         // Unpack the vertices
         let pº = list[pIndex], qº = list[qIndex]
         let rº = list[rIndex], sº = list[sIndex]
+
 
         // Reindex these vertices
         Triangulation.loopVertices[rº] = list
@@ -1249,7 +1257,9 @@ extension Triangulation {
           Triangulation.loopHooks[sº] = rº
         }
         
-        
+        // Debugging 
+        let foldLabel = "fo_" // "fo_\(list[hIndex])_"
+
         // Convex hubs always look like this (labels refer to internal edges),
         //    eº and fº point in the opposite direction to e & f
         //
@@ -1270,6 +1280,7 @@ extension Triangulation {
         
         
         // Is this a convex hub?
+        showVoronoi(label: "fo_", type: "Delaunay")
         if rº != sº {
           // Yes
           // Add vertex rº on the edge f
@@ -1342,15 +1353,23 @@ extension Triangulation {
         }
         
         // Update the triangulation
+        showVoronoi(label: foldLabel, type: "Delaunay")
+        if showMe > 1 { 
+          print("Flip external vertex \(rº)")
+        }
         if flipVertex(onEdge: f, trackBoundaries: &trackedEdges) { updateBoundary() }
-        showVoronoi(label: "fo_", type: "Delaunay")
+        showVoronoi(label: foldLabel, type: "Delaunay")
         
         // Convex corner
         if rº != sº {
+          if showMe > 1 { 
+            print("Flip external vertex \(sº)")
+          }
+
           if flipVertex(onEdge: e, trackBoundaries: &trackedEdges) { updateBoundary() }
-          showVoronoi(label: "fo_", type: "Delaunay")
+          showVoronoi(label: foldLabel, type: "Delaunay")
         }
-        
+
         // Add the internal vertices
         // Add pº near the incoming edge
         var shell = addVertex(near: e, vertex: pº)!
@@ -1396,8 +1415,11 @@ extension Triangulation {
         
         // Now we can update the mesh
         var a2 = a0 + (a + 2) % 3
+        if showMe > 1 { 
+          print("Flip internal vertex \(pº)")
+        }
         if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) {  updateBoundary() }    
-        showVoronoi(label: "fo_", type: "Delaunay")
+        showVoronoi(label: foldLabel, type: "Delaunay")
         
         // Add qº near the outgoing edge
         if qº != pº {
@@ -1413,10 +1435,13 @@ extension Triangulation {
           
           // Now proceed
           a2 = a0 + (a + 2) % 3
+          if showMe > 1 { 
+            print("Flip internal vertex \(qº)")
+          }
           if flipVertex(onEdge: a2, trackBoundaries: &trackedEdges) { updateBoundary() }        
-          showVoronoi(label: "fo_", type: "Delaunay")
+          showVoronoi(label: foldLabel, type: "Delaunay")
         }
-        
+
         // Anticlockwise search for an edge connected to the hub h
         var s = f, s2 = -1
         repeat {
@@ -1439,9 +1464,7 @@ extension Triangulation {
         
         // The hub edge
         let hubEdge = s2
-        
-        // Debug
-        showVoronoi(label: "fo_", type: "Delaunay")
+    
         
         // Find first loop edge which will survive -
         // Start at rº; which is recorded on f
@@ -1522,11 +1545,6 @@ extension Triangulation {
     // The initial edge
     var a = e
     
-    // Debugging
-    if showMe > 1 {
-      print("Flip Vertex")
-    }
-    
     // Now set the vertex stack
     var vertexStack = Dictionary<Int, Int>()
 
@@ -1534,9 +1552,6 @@ extension Triangulation {
     eachVertex: while EmptyVertex != v {
       var a2:Int
       
-      if showMe > 1 {
-        print("\tFlip vertex => \(v)")
-      }
       eachEdge: repeat {
         let a0 = 3 * (a/3)
         let a1 = a0 + (a + 1) % 3
@@ -1569,7 +1584,7 @@ extension Triangulation {
           let b0 = 3 * (b / 3)
           let b2 = b0 + (b + 2) % 3
           let w = vertices[b2]
-          if showMe > 1 { print("\t\tFlipped edge connecting \(v) => \(w)") }
+          if showMe > 1 { print("\tFlipped edge connecting \(v) => \(w)") }
           
           // We are processing (v) so can be ignored
           // If w is in the stack replace the edge
@@ -1624,7 +1639,7 @@ extension Triangulation {
           //let b0 = 3 * (b / 3)
           //let b2 = b0 + (b + 2) % 3
           let w = vertices[a2]
-          if showMe > 1 { print("\t\tFlipped edge connecting \(v) => \(w)") }
+          if showMe > 1 { print("\tFlipped edge connecting \(v) => \(w)") }
           
           // We are processing (v) so can be ignored
           // Now add/replace entry for (w)
@@ -1657,7 +1672,7 @@ extension Triangulation {
         // Stop at the stopEdge
       } while a > BoundaryEdge
       
-      if showMe > 1 { print("\tFinished vertex \(v)") }
+      if showMe > 1  && flipped { print("Flip Vertex \(v)") }
       
       // Now get another vertex
       // Query : Does order matter?
@@ -1679,6 +1694,7 @@ extension Triangulation {
   
   // This adds the new vertices along each active edge (from one rº => sº)
   mutating func addImages() throws {
+    showMe -= 1
     // Get each hull loop
     for (aº, bº) in Triangulation.loopHooks {
       // Find the edge joining the vertices aº & bº
@@ -2367,7 +2383,7 @@ extension Triangulation {
     }
     
     // Logging
-    showVoronoi(label: "rv_", type:"Delaunay")
+    //showVoronoi(label: "rv_", type:"Delaunay")
     
     // Now use the shell of vertices to define a zone - use full machinery to reattach
     // At the moment this doesn't add any extra points but does
@@ -2390,7 +2406,7 @@ extension Triangulation {
       //
       try! join(loop: convexHullNext)
 
-      showVoronoi(label: "jz_", type: "Voronoi")
+      //showVoronoi(label: "jz_", type: "Voronoi")
     } // End of each convex zone
   }
   
@@ -2786,7 +2802,7 @@ extension Triangulation {
       loopEdges(edge: d + 2, replaces: a2)
     }
 
-    // Do triangles c & d exist?
+    // Does triangle b exist?
     let b = halfEdges[a]
     if b > BoundaryEdge {
       // Yes
@@ -3440,8 +3456,8 @@ extension Triangulation {
     vtkString += "\nSCALARS properties double 1"
     vtkString += "\nLOOKUP_TABLE default"
     for (_, v) in zoneVertex.enumerated() {
-      let z = Zone.propertyList[Triangulation.properties[v]].density
-      vtkString += "\n\(z)"
+      let z = Zone.propertyList[Triangulation.properties[v]].tag ?? Zone.propertyList[Triangulation.properties[v]].density
+      vtkString += "\n\(z ?? 0)"
     }
     
     return vtkString
@@ -3505,7 +3521,7 @@ extension Triangulation {
   // Logging
   internal func showVoronoi(label s:String, type flag: String = "Voronoi", force show: Bool = false) {
     showCount += 1
-    let i = showCount
+    let i = showCount % showLimit
     
     // Debugging - More information
     if show || showMe > 2  {
@@ -3513,7 +3529,7 @@ extension Triangulation {
       let folder = try! Folder(path: OutputFolder)
       let filename = "edges_" + s + String(format:"%04d.vtk", i)
       let file = try! folder.createFile(named: filename)
-      try! file.write(vtkEdges(label: "\(i-1)", type: flag))
+      try! file.write(vtkEdges(label: "\(i)", type: flag))
     }
   }
 }

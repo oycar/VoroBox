@@ -66,8 +66,6 @@ struct Zone: Codable {
   var scale:Array<Double> = [1, 1]
 
   // The polygon bounding the zone
-  // along with its size
-  var polygon = Array<String>()
   var polygonCount = 0
 
   // Convex zones
@@ -121,8 +119,9 @@ extension Zone {
       scale  = Zone.scale
     }
 
-    // Make space for the arcs
-    Zone.arcVertices = Array(repeating: [], count: arcs.count)
+    if showMe > 0 && stored.name != nil {
+      print("Processing zone => \(stored.name!)")
+    }
     
     // The added zones need to be associated with properties 
     // Either the default zone, or a single shared zone or a distinct zone for each one 
@@ -288,11 +287,11 @@ extension Zone {
     // Use the linked properties 
     let properties = Zone.propertyList[propertyIndex]
 
-    // Can be replaced once other components working
-    let density = properties.density 
+    // Use properties - is this appropriate?
+    let density = properties.density ?? 0
     
     // Number of points is density times box area
-    var n = 1 + Int(density * (maxX - minX) * (maxY - minY))
+    var n = Int((density * (maxX - minX) * (maxY - minY)).rounded())
       
     // Add the points
     nextRandomPoint: while n > 0 {
@@ -323,8 +322,6 @@ extension Zone {
         // Set zone index
         zoneIndices.append(Triangulation.pointCount)
         Triangulation.pointCount += 1
-
-        //n -= 1
       }
 
       // Reduce counter unconditionally 
@@ -1088,6 +1085,9 @@ func triangulateZones(using storedData:StoredZones) throws {
       }
     }
  
+
+    // Make space for the arcs
+    Zone.arcVertices = Array(repeating: [], count: arcs.count)
 
     // Read each instance
     for g in geometryCollection {

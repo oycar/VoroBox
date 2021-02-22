@@ -46,6 +46,7 @@ struct StoredZones : Codable {
     var origin: Array<Double>?
     var scale: Array<Double>?
     var type:String?
+    var name:String?
     
     // Topojson-like description
     var polygon:Array<Array<Int>>?
@@ -66,17 +67,18 @@ struct StoredZones : Codable {
 // Properties
 struct Properties: Codable {
   // Zone properties
-  var density:Double = 0
+  var density:Double? = 0
+  var tag:Double? = 0
 }
 
 func mingleProperties(_ p:Int, _ q:Int) -> Int {
   // Create a new mingled properties value 
-  let pd = Zone.propertyList[p].density,  qd = Zone.propertyList[q].density
-
+  let pd = Zone.propertyList[p].density ?? 0,  qd = Zone.propertyList[q].density ?? 0
+  let tag = Double(Zone.propertyList.count)
+  
   // Save the properties 
-  //Zone.propertyList.append(Properties(density: (pd * qd).squareRoot()))
-  Zone.propertyList.append(Properties(density: 0.5 * (pd + qd)))
-
+  Zone.propertyList.append(Properties(density: 0.5 * (pd + qd), tag: tag))
+  
   // Return the index 
   return Zone.propertyList.count - 1
 }
