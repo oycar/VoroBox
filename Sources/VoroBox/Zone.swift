@@ -658,7 +658,7 @@ extension Zone {
       untilConvex: while polygonCount > 3 && (!holeIndices.isEmpty || ears.count < polygonCount) {
 
         // For testing turn off reversible clip
-        var reversibleClip = true
+        var reversibleClip = false
          
         // Get the ear at the end of the list
         let i = ears.last!
@@ -729,7 +729,7 @@ extension Zone {
             // But this only happens if [i] is [0]
             // and if ears[0] == 0
             if ears.first == (i % polygonCount) {
-              reversibleClip = false
+              // reversibleClip = false
               ears.removeFirst()
             }
           }
@@ -740,6 +740,7 @@ extension Zone {
           print("clipZone: For polygon order \(polygonCount) only \(ears.count) - should be at least two ears")
           throw triangulationError.initError("Less than two ears in clipZone - malformed input?")
         }
+
         // Update convexZone with the clip
         convexZone = nil == convexZone ? z : try! convexZone!.addTriangularZone(triangle: z)
         
@@ -1127,5 +1128,3 @@ func triangulateZones(using storedData:StoredZones) throws {
     try! Triangulation.triangulation.voronoiConforming()
   }
 }
-
-

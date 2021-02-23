@@ -2,7 +2,7 @@ type: VoroBox
 control:
   showMe: 1
 objects:
-  nld: 
+  Benelux: 
     - type: GeometryCollection
       geometries:
       - polygon:
