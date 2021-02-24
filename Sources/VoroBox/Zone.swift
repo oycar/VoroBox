@@ -165,6 +165,10 @@ extension Zone {
 
     }
 
+    for i in 0..<Zone.arcVertices.count {
+      Zone.arcVertices[i].removeAll(keepingCapacity: true)
+    }
+
     // Explicitly specified points
     var specifiedPoints = Array<Array<Double>>()
     if let point = stored.point {
@@ -366,35 +370,7 @@ extension Zone {
           
           // The points are mapped to vertices
           roundList: for k in 0..<inputArc.count {
-            var p = inputArc[k]
-            
-            // Can reuse vertices - this can only happen in the same arc
-            if k > 0 {
-              // Is this a matching point?
-              // A duplicated point must be in the same arc
-              // Get each earlier point in this arc
-              if let vertexIndex = inputArc[0...(k-1)].firstIndex(of: p) {
-                // A duplicated point - may need to blend properties 
-                let v = Zone.arcVertices[arcIndex][vertexIndex]
-                
-                // What properties are associated with this point 
-                // Even though on the same arc it might 
-                // have mingled with another vertex previously 
-                let otherIndex = Triangulation.properties[v]
-                if otherIndex != propertyIndex {
-                  // Need to adjust the properties here 
-                  let newIndex = mingleProperties(propertyIndex, otherIndex)
-                  
-                  // Update the properties 
-                  Triangulation.properties[v] = newIndex
-                }
-
-
-
-                Zone.arcVertices[arcIndex].append(v)
-                continue roundList
-              }
-            }
+             var p = inputArc[k]
 
             // Do we need to check other arcs?
             if beforeIndex > 0 {
