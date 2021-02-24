@@ -816,173 +816,6 @@ extension Triangulation {
   // Conforming Voronoi
   // First the hubs need to defined
   mutating func voronoiConforming() throws {
-    
-    // // First pass finds the generating points to are used to obtain the constructors
-    // var hubPoints = Array<Array<Double>>()
-    // var hubRadii  = Dictionary<Int, Double>()
-    // var isLinear  = Set<Int>()
-    // if showMe != 0 {
-    //   print("Pass 2")
-    //   print("\tFind hub generators")
-    //   showVoronoi(label: "fh_", type: "Delaunay")
-    // }
-    
-    // // Get each hull loop
-    // let loopKeys = Triangulation.loopHooks.keys.sorted()
-    // for iº in loopKeys {
-    //   // Get a boundary edge from this loop
-    //   let loopStart = Triangulation.loopHooks[iº]!
-      
-    //   // Find the first vertex
-    //   var eº = Triangulation.hullPrev[loopStart]!
-    //   var fº = loopStart
-    //   var h  = vertices[eº]
-    //   var j  = vertices[loopStart]
-    //   var hx = Triangulation.coords[2 * h], hy = Triangulation.coords[2 * h + 1]
-    //   var jx = Triangulation.coords[2 * j], jy = Triangulation.coords[2 * j + 1]
-      
-    //   // Get the next index and hub
-    //   roundLoop: repeat {
-    //     // Update Edges
-    //     eº = fº
-    //     fº = Triangulation.hullNext[fº]!
-        
-    //     // Update vertices
-    //     let g = h
-    //     h  = j
-    //     j = vertices[fº]
-        
-    //     // The points associated with these vertices
-    //     let gx = hx
-    //     let gy = hy
-    //     hx = jx
-    //     hy = jy
-    //     jx = Triangulation.coords[2 * j]
-    //     jy = Triangulation.coords[2 * j + 1]
-        
-    //     // We need a vertex plus the two edges
-    //     //
-    //     //                  g
-    //     //                 /
-    //     //                /
-    //     //               /
-    //     //              h ::::::::: <angle bisector> ::::
-    //     //               \
-    //     //                \
-    //     //                 \
-    //     //                  j
-    //     //
-    //     // The triangle incentre lies on the angle bisector
-        
-    //     // The sense of the triangle [ghj]
-    //     // If sense is positive a convex corner
-    //     // If sense is zero not a corner - colinear
-    //     var sense = orient(gx, gy, hx, hy, jx, jy)
-        
-    //     // Now we need incircle Centre or (for colinear points) this is just the hub
-    //     // All colinear points will have at least one true triangle
-    //     // which is adjacent to it so a reliable result for the
-    //     // location of the generator point can be derived
-    //     var centre:Array<Double>? = nil
-    //     if 0 != sense {
-    //       centre = inCentre(gx, gy, hx, hy, jx, jy)
-          
-    //       // Provide a limiting value for the hub size
-    //       let dx = centre![0] - hx
-    //       let dy = centre![1] - hy
-    //       let r2 = dx * dx + dy * dy
-          
-    //       // Check this
-    //       if r2 < squaredThreshold {
-    //         // Treat as colinear
-    //         // First though treat the centre as if it were convex
-    //         if sense < 0 {
-    //           centre = [hx - dx, hy - dy]
-    //         }
-    //         sense = 0
-    //       }
-    //     }
-        
-    //     // The hubSize
-    //     var hubSize = hubRadii[h, default:Double.infinity]
-        
-    //     // Is this colinear?
-    //     if 0 == sense { isLinear.insert(hubPoints.count) }
-        
-    //     // Now loop over the spokes connected to the hub h
-    //     // This is an anticlockwise loop
-    //     // Ends on the outgoing edge from vertex (g)
-        
-    //     var a = eº, a2:Int
-    //     repeat {
-    //       // Get this triangle
-    //       let a0 = 3 * (a / 3)
-    //       let a1 = a0 + (a + 1) % 3
-    //       a2 = a0 + (a + 2) % 3
-          
-    //       // Update internal vertices (we can be more efficient than this if it works)
-    //       let i1 = vertices[a1]
-    //       let i2 = vertices[a2]
-          
-    //       // Coordinates
-    //       let i1x = Triangulation.coords[2 * i1]
-    //       let i1y = Triangulation.coords[2 * i1 + 1]
-    //       let i2x = Triangulation.coords[2 * i2]
-    //       let i2y = Triangulation.coords[2 * i2 + 1]
-          
-    //       // if i1 is j & i2 is g this is done (only one triangle ie [hjg]
-    //       // Only one triangle never occurs for a colinear point
-    //       let c = j == i1 && g == i2 ? centre! : inCentre(hx, hy, i1x, i1y, i2x, i2y)
-          
-    //       // Get r2
-    //       let dx = c[0] - hx
-    //       let dy = c[1] - hy
-    //       let r2 = dx * dx + dy * dy
-          
-    //       // We need the incircle radius for this triangle
-    //       if r2 < hubSize {
-    //         // Note this
-    //         hubSize = r2
-    //       }
-          
-    //       // Next edge
-    //       a = halfEdges[a2]
-          
-    //       // Finished if a boundary
-    //     } while BoundaryEdge < a
-        
-    //     // Save the hubSize and the incentre at this index
-    //     if sense != 0 {
-    //       hubPoints.append(centre!)
-    //     } else {
-    //       // We need to obtain a point perpendicular
-    //       // to the line connecting g & j at the hub h of length squareRoot(hubSize)
-    //       let r = perpendicular(scale: hubSize, hx, hy, gx, gy, jx, jy)
-    //       hubPoints.append(r)
-    //     }
-        
-    //     // The hub radii is accumulated for every hub h -
-    //     // so check this hub was not recorded before on another loop
-    //     if let r2 = hubRadii[h] {
-    //       if hubSize < r2 {
-    //         // Replace the entry
-    //         hubRadii[h] = hubSize
-    //       }
-    //     } else { // New entry
-    //       hubRadii[h] = hubSize
-    //     }
-        
-    //     // Debugging
-    //     if showMe > 1 {
-    //       print("\thub => \(h)")
-    //       print("\tindex => \(hubPoints.count - 1)")
-    //       print("\tcentre => \(hubPoints.last!)")
-    //       print("\tradius => \(hubRadii[h]!.squareRoot())")
-    //     }
-        
-    //   } while loopStart != fº
-    // } // End of each loop
-  
 
     // First pass finds the generating points to are used to obtain the constructors
     var hubPoints = Array<Array<Double>>()
@@ -1448,12 +1281,12 @@ extension Triangulation {
         // Get the vertices waiting to be added
         iº += 1
         
-        // debugging
-        if 3434 == list[hIndex] { 
-          showMe = 3
-        } else if list[hIndex] < 3433 {
-          showMe = saveMe
-        }
+        // // debugging
+        // if 3434 == list[hIndex] { 
+        //   showMe = 3
+        // } else if list[hIndex] < 3433 {
+        //   showMe = saveMe
+        // }
 
         // Unpack the vertices
         let pº = list[pIndex], qº = list[qIndex]
@@ -1494,8 +1327,6 @@ extension Triangulation {
         //         rº ---- j
         //            fº+2
         //
-        
-        
         
         // Is this a convex hub?
         showVoronoi(label: "fo_", type: "Delaunay")

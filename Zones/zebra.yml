@@ -3,9 +3,7 @@
 # Use modified & simplified TopoJSON format
 #
 type: VoroBox
-properties:
-  randomDensity: 0
-  showMe: 1
+control: { ShowMe: 1 }
 objects:
   zebra:
     - type: GeometryCollection
@@ -14,3 +12,5 @@ objects:
         - polygon: [[0]]
 
 arcs: [[&a [10, 7],  [12, 3],  [20, 8],  [13, 17], [10, 12], [12, 14], [14, 9],  [8, 10], [6, 14], [10, 15], [7, 17],  [0, 16],  [1, 13], [3, 15], [5, 8], [-2, 9],  [5, 5],   [0, 0], *a]]
+properties:
+  - density: 0
