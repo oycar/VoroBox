@@ -64,6 +64,7 @@ struct Zone: Codable {
   // Instance properties
   var origin:Array<Double> = [0, 0]
   var scale:Array<Double> = [1, 1]
+  var randompoint:Int? = 0
 
   // The polygon bounding the zone
   var polygonCount = 0
@@ -208,11 +209,6 @@ extension Zone {
   mutating func addPointsToZone(_ pointList: Array<Array<Double>>) -> Array<Array<Double>> {
     // Now we can allocate the points (if any) that are associated with each convex zone
     var newList = Array<Array<Double>>()
-    
-    // var minX = boundingBox[0][0]
-    // var minY = boundingBox[0][1]
-    // var maxX = boundingBox[1][0]
-    // var maxY = boundingBox[1][1]
     var minX = Double.infinity
     var minY = Double.infinity
     var maxX = -Double.infinity
@@ -328,7 +324,7 @@ extension Zone {
         Triangulation.pointCount += 1
       }
 
-      // Reduce counter unconditionally 
+      // Reduce counter
       n -= 1
     } // Add random points
     

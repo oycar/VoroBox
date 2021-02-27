@@ -47,6 +47,7 @@ struct StoredZones : Codable {
     var scale: Array<Double>?
     var type:String?
     var name:String?
+
     
     // Topojson-like description
     var polygon:Array<Array<Int>>?
@@ -60,6 +61,8 @@ struct StoredZones : Codable {
     var properties: Int?
     var multiproperties: Array<Int>?
 
+    // Ignored
+    var randompoint: Int?
   }
 
 }
@@ -68,6 +71,7 @@ struct StoredZones : Codable {
 struct Properties: Codable {
   // Zone properties
   var density:Double? = 0
+  var number:Int? = 0
   var tag:Double? = 0
 }
 

@@ -1254,7 +1254,6 @@ extension Triangulation {
     // Need to update the loopHooks again!
     loopHooks = Triangulation.loopHooks
     Triangulation.loopHooks.removeAll(keepingCapacity: true)
-    let saveMe = showMe
     
     // Each loop hook must be obtained in the correct order...
     for (key, j) in loopHooks {

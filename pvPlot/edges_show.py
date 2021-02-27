@@ -15,18 +15,18 @@ if args.a == 'check_string_for_empty':
 else:
     zone_name = args.a
 
-#pv.set_plot_theme("document")
+pv.set_plot_theme("document")
 voronoi_file = 'Output/edges_' + zone_name + '.vtk'
 v = pv.read(voronoi_file)
 
 label = 'Triangulation & Voronoi Edges - Size {}'.format(v.n_cells - 2)
-v["Labels"] = ["{}".format(v.active_scalars[i]) for i in range(v.n_points)]
+#v["Labels"] = ["{}".format(v.active_scalars[i]) for i in range(v.n_points)]
 
 write_file = False
 plotter = pv.Plotter(off_screen=write_file)
 colour_map = cc.glasbey_dark
 
-_ = plotter.add_point_labels(v, "Labels", point_size=5, font_size=10)
+#_ = plotter.add_point_labels(v, "Labels", point_size=5, font_size=10)
 _ = plotter.add_mesh(v, show_scalar_bar=False, cmap=colour_map)
 #_ = plotter.add_mesh(v, show_scalar_bar=False, cmap=colour_map, color='yellow')
 _ = plotter.show_bounds(xlabel=label, ylabel='')
