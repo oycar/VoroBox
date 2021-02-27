@@ -81,18 +81,12 @@ internal let OutputFolder = ProjectFolder + "/Output"
 internal var showCount = 0
 internal let showLimit = 40
 
-// The edge boundary flag we can use a few small negative integers
-internal let FirstZone = 16 // No zone will have an ID less than this
-internal let NoZoneCode = 0 // Not a zone code
-
 // Codes with magnitudes less than BoundaryFlag are available for special purposes
-// But for Voronoi conforming should be even; for Delaunay conforming should be odd
 internal let BoundaryEdge = -1 // On the expanding hull
 internal let EmptyEdge = -2 // Useful for removed edges
 internal let UnusedEdge = -3
 internal let NoEdge = -4
 internal let FinishedEdge = -5
-internal let BoundaryFlag = -2 * FirstZone // Any boundary code larger than this is special purpose
 internal let EmptyVertex = -888
 
 // Vertex ordering - HSPQR
@@ -111,7 +105,6 @@ struct Triangulation: Codable {
   // Store all trangulation coordinates
   // The count of points, their co-ordinates
   static var coords = Array<Double>()
-  static var code = Array<Int>()
   static var properties = Array<Int>() //  Index of preoperties associated with this vertex
   static var pointCount = 0
   
@@ -139,9 +132,6 @@ struct Triangulation: Codable {
   // Convex hull properties
   var convexHullEdges = Dictionary<Int, Int>()
     
-  // This instance has a particular code for boundaries
-  var boundaryCode = BoundaryEdge
-  
   // A list of Voronoi zones and the associated vertex index
   var zoneList = Array<Array<Int>>()
   var zoneVertex = Array<Int>()
@@ -170,7 +160,7 @@ extension Triangulation {
   }
   
   // Add a set of vertices
-  mutating func addVertices(indices zoneIndices: Array<Int>, boundary code:Int = BoundaryEdge) throws ->  Dictionary<Int, Int> {
+  mutating func addVertices(indices zoneIndices: Array<Int>) throws ->  Dictionary<Int, Int> {
     var hashSize = 0
     var hashFactor: Double = 0
 
@@ -181,9 +171,6 @@ extension Triangulation {
       phi = dy > 0 ? 3 - phi : 1 + phi // Ranges from [0..4]
       return Int(hashFactor * phi.rounded(.down)) % hashSize
     }
-    
-    // Update the code describing the boundary
-    boundaryCode = -code
     
     // Use the number of local indices...?
     let numberPoints = zoneIndices.count
@@ -278,7 +265,7 @@ extension Triangulation {
     convexHullNext[i2] = i0; convexHullPrev[i1] = i0
     
     // Add the initial triangle
-    let _ = addTriangle(i0, i1, i2, boundaryCode, boundaryCode, boundaryCode)
+    let _ = addTriangle(i0, i1, i2, BoundaryEdge, BoundaryEdge, BoundaryEdge)
 
     // Most work done when no internal points
     if numberPoints > 0 {
@@ -409,7 +396,7 @@ extension Triangulation {
         //                                        q---e
         //
         // The linked edges are BoundaryEdge (outside the hull) for (e->i) and (i->q) and hillTri[e] for (q->e)
-        var t = addTriangle(e, i, q, boundaryCode, boundaryCode, convexHullEdges[e]!)
+        var t = addTriangle(e, i, q, BoundaryEdge, BoundaryEdge, convexHullEdges[e]!)
         
         // Number of edges has increased by 3; t is the old number of vertices
         // Make the new triangle locally delaunay
@@ -451,7 +438,7 @@ extension Triangulation {
                       Triangulation.coords[2 * n], Triangulation.coords[2 * n + 1]) > 0) {
                         
                         // Add this triangle to the triangulation
-                        t = addTriangle(n, i, q, convexHullEdges[i]!, boundaryCode, convexHullEdges[n]!)
+                        t = addTriangle(n, i, q, convexHullEdges[i]!, BoundaryEdge, convexHullEdges[n]!)
                         
                         // We added edge i=>q
                         // Was it already there from an earlier zone?
@@ -505,7 +492,7 @@ extension Triangulation {
                         Triangulation.coords[2 * q], Triangulation.coords[2 * q + 1]) > 0) {
                           
                           // Add this triangle to the triangulation
-                          t = addTriangle(q, i, e, boundaryCode, convexHullEdges[e]!, convexHullEdges[q]!)
+                          t = addTriangle(q, i, e, BoundaryEdge, convexHullEdges[e]!, convexHullEdges[q]!)
                           
                           // We added edge q=>i                          
                           // Fix locally non-delaunay edges
@@ -676,84 +663,67 @@ extension Triangulation {
       let e = firstMatch.key
       let b = matchedEdges.removeValue(forKey: e)!
       
-      // flip codes
-      let bCode = -halfEdges[b]
-      let eCode = -halfEdges[e]
+      // The vertices 
+      p = vertices[e]
+      q = vertices[b]
       
-      // Edges are only joined when they have
-      // compatible codes
-      // These are any even codes (Delaunay conforming)
-      // Or equal odd codes (Voronoi conforming)
-      // Or if forceJoin is already set
-      if eCode == bCode || (0 == eCode % 2 && 0 == bCode % 2) {
-        p = vertices[e]
-        q = vertices[b]
-        
+      //
+      //      convex
+      //   \ d       f /
+      //    \    e    /
+      //     p-------q
+      //    /    b    \
+      //   / c       a \
+      //   Triangulation
+      //
+      
+      let a = Triangulation.hullPrev[b]!, f = Triangulation.hullNext[e]!
+      let c = Triangulation.hullNext[b]!, d = Triangulation.hullPrev[e]!
+      
+      // New entries
+      Triangulation.hullPrev[f] = a; Triangulation.hullNext[a] = f
+      Triangulation.hullPrev[c] = d; Triangulation.hullNext[d] = c
+      
+      // Clear old pointers
+      Triangulation.hullPrev[e] = nil; Triangulation.hullNext[e] = nil
+      Triangulation.hullPrev[b] = nil; Triangulation.hullNext[b] = nil
+
+      // Join the halfEdges
+      halfEdges[e] = b
+      halfEdges[b] = e
+
+      // four-way flip -> should become two way flips
+      //
+      // This flips into the triangulation first
+      var flipBoundaries = Array<Array<Int>>?([])
+      _ = try! flipEdges(b, list: &flipBoundaries, flipFour: true)
+      
+      // Patch the loops
+      // In order!
+      for f in flipBoundaries! {
+        // Splice new edge y for old edge x
         //
-        //      convex
-        //   \ d       f /
-        //    \    e    /
+        //         x
         //     p-------q
-        //    /    b    \
+        //    /    y    \
         //   / c       a \
         //   Triangulation
         //
-        
-        let a = Triangulation.hullPrev[b]!, f = Triangulation.hullNext[e]!
-        let c = Triangulation.hullNext[b]!, d = Triangulation.hullPrev[e]!
-        
-        // New entries
-        Triangulation.hullPrev[f] = a; Triangulation.hullNext[a] = f
-        Triangulation.hullPrev[c] = d; Triangulation.hullNext[d] = c
-        
-        // Clear old pointers
-        Triangulation.hullPrev[e] = nil; Triangulation.hullNext[e] = nil
-        Triangulation.hullPrev[b] = nil; Triangulation.hullNext[b] = nil
+        let new = f.first!, old = f.last!
 
-        // Join the halfEdges
-        halfEdges[e] = b
-        halfEdges[b] = e
+        // Sometimes an edge can be swapped out
+        loopEdges(edge: new, replaces: old)
 
-        // four-way flip -> should become two way flips
-        //
-        // This flips into the triangulation first
-        var flipBoundaries = Array<Array<Int>>?([])
-        _ = try! flipEdges(b, list: &flipBoundaries, flipFour: true)
-        
-        func patchLoop(edge new:Int, replaces old:Int) {
-          // Sometimes an edge can be swapped out
-
-          
-          // Patch the loop
-          loopEdges(edge: new, replaces: old)
-
-          // Patch the matchedEdges
-          // Is this correct?
-          if let value = matchedEdges[old] {
-            matchedEdges[new] = value
-            matchedEdges[old] = nil
-          } else if let element = matchedEdges.first(where: {$0.value == old }) {
-            matchedEdges[element.key] = new
-          }
+        // Patch the matchedEdges
+        // Is this correct?
+        if let value = matchedEdges[old] {
+          matchedEdges[new] = value
+          matchedEdges[old] = nil
+        } else if let element = matchedEdges.first(where: {$0.value == old }) {
+          matchedEdges[element.key] = new
         }
-        
-        // Patch the loops
-        // In order!
-        for f in flipBoundaries! {
-          // Splice new edge y for old edge x
-          //
-          //         x
-          //     p-------q
-          //    /    y    \
-          //   / c       a \
-          //   Triangulation
-          //
-          patchLoop(edge: f.first!, replaces: f.last!)
-        } // End of each flip boundary
-      }
+      } // End of each flip boundary
     } // End of matched
-      
-
     // Finished
   }
   
@@ -965,11 +935,9 @@ extension Triangulation {
             // Treat co-linear as reflex? 
             if gSize < hSize {
               hubSize = gSize
-              print("Replaced radius \(h) with \(gSize.squareRoot())")
             } else if hSize < hubRadii[g]! {
               // Correct previous entry 
               hubRadii[g] = hSize
-              print("Replaced radius \(g) with \(hSize.squareRoot())")
             }
           }
         } else if sense <= 0 { 
@@ -1021,13 +989,11 @@ extension Triangulation {
         // Both might need setting 
         if gSize < hubRadii[h]! {
           hubRadii[h] = gSize
-          print("Replaced radius \(h) with \(gSize.squareRoot())")
         } 
         
         if hSize < hubRadii[g]! {
           // Correct previous entry 
           hubRadii[g] = hSize
-          print("Replaced radius \(g) with \(hSize.squareRoot())")
         }
       } 
 
@@ -1062,10 +1028,7 @@ extension Triangulation {
       var j  = vertices[loopStart]
       var hx = Triangulation.coords[2 * h], hy = Triangulation.coords[2 * h + 1]
       var jx = Triangulation.coords[2 * j], jy = Triangulation.coords[2 * j + 1]
-      
-      // Save the current zone code
-      let zCode = halfEdges[loopStart]
-      
+            
       // Get the next index and hub
       roundLoop: repeat {
         //
@@ -1118,10 +1081,7 @@ extension Triangulation {
 
         // Sentinels pick up generator codes 
         Triangulation.properties.append(Triangulation.properties[h])
-        
-        // Generator points have the local code
-        Triangulation.code.append(zCode)
-        
+                
         // Increment the point count
         let d = Triangulation.pointCount
         Triangulation.pointCount += 1
@@ -1160,9 +1120,6 @@ extension Triangulation {
           // The properties of h are copied - twice
           Triangulation.properties.append(Triangulation.properties[h])
           Triangulation.properties.append(Triangulation.properties[h])
-
-          Triangulation.code.append(zCode)
-          Triangulation.code.append(zCode)
           
           if sense > 0 {
             // Internal generator on convex corner
@@ -1194,7 +1151,6 @@ extension Triangulation {
           
           // The properties of h are copied - once
           Triangulation.properties.append(Triangulation.properties[h])
-          Triangulation.code.append(zCode)
           
           // Internal generator same as on a convex corner
           pº = d
@@ -1279,18 +1235,10 @@ extension Triangulation {
       foldOut: repeat {
         // Get the vertices waiting to be added
         iº += 1
-        
-        // // debugging
-        // if 3434 == list[hIndex] { 
-        //   showMe = 3
-        // } else if list[hIndex] < 3433 {
-        //   showMe = saveMe
-        // }
 
         // Unpack the vertices
         let pº = list[pIndex], qº = list[qIndex]
         let rº = list[rIndex], sº = list[sIndex]
-
 
         // Reindex these vertices
         Triangulation.loopVertices[rº] = list
@@ -1536,7 +1484,7 @@ extension Triangulation {
           countHubs += 1
           if countHubs > hubThreshold {
             hubThreshold += hubStep
-            print("Processed \(countHubs) hubs : \(100.0 * Double(countHubs) / numberHubs) %)")
+            print("Processed \(countHubs) hubs : \(100.0 * Double(countHubs) / numberHubs)%")
           }          
         }
         
@@ -1683,9 +1631,6 @@ extension Triangulation {
 
           // Update the vertex stacks
           // Only one entry is needed for each vertex
-          //let b  = halfEdges[a2]
-          //let b0 = 3 * (b / 3)
-          //let b2 = b0 + (b + 2) % 3
           let w = vertices[a2]
           if showMe > 1 { print("\tFlipped edge connecting \(v) => \(w)") }
           
@@ -1770,7 +1715,6 @@ extension Triangulation {
       
       // Set the incoming edge to be from sª to rª
       var eº = loopStart
-      let zCode = halfEdges[eº]
       
       // The logic here is based on edge segments rather than vertices
       roundLoop: repeat {
@@ -1821,10 +1765,9 @@ extension Triangulation {
         repeat {
           // Balance one vertex at a time
           
-
           //    Five Types (ignoring the co-linear special cases!)
           //
-          //  No diagonal - zero flip  Right Diagonal - Single Flip  Left Diagonal - Single Flip
+          // No diagonal: zero flip  Right Diagonal: Single Flip  Left Diagonal: Single Flip
           //             v                      v----- pª                     v----- pª
           //            / \                     |    / |                      | \    |
           //    A      /   \              B     |   /  |              C       |  \   |
@@ -2115,7 +2058,6 @@ extension Triangulation {
             
             // The local edge code
             Triangulation.properties.append(Triangulation.properties[v])
-            Triangulation.code.append(zCode)
             growTriangulation(to: Triangulation.pointCount)
             
             // fº + 2 is the edge v  -> rº
@@ -2191,10 +2133,7 @@ extension Triangulation {
     // Establish the stopEdge (might be a boundary code)
     // We have to note it because triangles will be removed
     let stopEdge = halfEdges[startEdge]
-    
-    // Note the boundary code - the default is Delaunay conforming
-    var externalCode = EmptyEdge
-    
+        
     // Build a list of vertices
     var shellVertices = Array<Int>()
     
@@ -2230,24 +2169,6 @@ extension Triangulation {
     
     var a2:Int
     vertexLoop: repeat {
-      func shellCode(_ b:Int) -> Int {
-        if b <= BoundaryEdge {
-          // The boundary code - save a new
-          // code, conforming edges have
-          // an odd code which will be unique
-          // non-conforming may not be unique
-          // but are equivalent
-          
-          // Always save an odd (Voronoi conforming) code
-          // If saved code is even (Delaunay conforming) save the minimum
-          if 1 == b % 2 || (0 == externalCode % 2 && b < externalCode) {
-            externalCode = b
-          }
-        }
-        
-        return externalCode
-      }
-      
       let a0 = 3 * (a / 3)
       let a1 = a0 + (a + 1) % 3
       a2 = a0 + (a + 2) % 3
@@ -2267,9 +2188,6 @@ extension Triangulation {
       // Save shell edge and vertex
       shellVertices.append(vertices[a1])
       shellEdges.append(a1)
-      
-      // Need to obtain the boundary code (if there is one)
-      externalCode = shellCode(halfEdges[a1])
 
       // Is this the stopEdge - can't rely on the halfEdge
       // still being connected
@@ -2281,7 +2199,6 @@ extension Triangulation {
         if stopEdge <= BoundaryEdge {
           shellVertices.append(v)
           shellEdges.append(a2)
-          externalCode = shellCode(ha2)
         }
         
         // All done
@@ -2299,7 +2216,6 @@ extension Triangulation {
       print("Remove Vertex => \(vertices[startEdge])")
       print("\tShell Edges    => \(shellEdges)")
       print("\tShell Vertices => \(shellVertices)")
-      print("\tShell Code     => \(shellEdges.map({halfEdges[$0]}))")
     }
     
     // Logging
@@ -2309,20 +2225,15 @@ extension Triangulation {
     // They will either be *boundary* edges or *internal* edges
     // We need to add all the internal edges to the loops, connecting them
     // up in the right way; and also remove any boundary edges
-    //
-    // When the removed vertex (h) is on the loop (ie a convex hub) the
-    // number of shellCodes will be one less than the number of shellVertices
-    //
-    
-    
+
     // How the edges are to be processed - essentially edges are turned inside out
     //
     //     . d          f .            .\ d         f /.
     //   g  .            . i           g.\           /.i
     //       . ...e.... .                .\         /.
     //       .*––––––––*.           ==>   .*       *.
-    //       .|    h   |.                 .|       |.          n was Triangulation.hullNext[e]
-    //      p.|        |.n               p.|       |.n         p was Triangulation.hullPrev[e]
+    //       .|    h   |.                 .|       |.       n was Triangulation.hullNext[e]
+    //      p.|        |.n               p.|       |.n      p was Triangulation.hullPrev[e]
     //
     //
     //        ....
@@ -2394,10 +2305,10 @@ extension Triangulation {
         }
         
         // Set the edge code
-        halfEdges[h] = externalCode
+        halfEdges[h] = BoundaryEdge
 
         // Update edge
-        d = externalCode        
+        d = BoundaryEdge
       } else {
         // Type *B
         if d <= BoundaryEdge {
@@ -2446,7 +2357,7 @@ extension Triangulation {
     // At the moment this doesn't add any extra points but does
     // add vertices and triangles
     // treat it as if it did add points
-    let localZone = Zone(given: shellVertices, code: externalCode)
+    let localZone = Zone(given: shellVertices)
 
     // Consider reusing empty triangles to avoid this step
     Triangulation.pointCount += localZone.polygonCount
@@ -2457,7 +2368,7 @@ extension Triangulation {
       // Track this
       
       // Add the zone to the triangulation
-      let convexHullNext = try! addVertices(indices: z.zoneIndices, boundary: z.code)
+      let convexHullNext = try! addVertices(indices: z.zoneIndices)
       
       // Join convexZones together
       //
@@ -2723,7 +2634,7 @@ extension Triangulation {
     let q = vertices[a1]
 
     // New triangle
-    let t = addTriangle(q, e, i, a, boundaryCode, boundaryCode)
+    let t = addTriangle(q, e, i, a, BoundaryEdge, BoundaryEdge)
     
     // a (e->q) was a boundary edge; and is replaced by t+1 (e->i) and t+2 (i->q)
     //
@@ -2851,7 +2762,7 @@ extension Triangulation {
     vertices[a] = p
     
     //  Create new triangle D
-    let d = addTriangle(q, p, i, boundaryCode, a2, ha2)
+    let d = addTriangle(q, p, i, BoundaryEdge, a2, ha2)
     
     // Outer edges
     if ha2 <= BoundaryEdge {
@@ -3523,15 +3434,10 @@ extension Triangulation {
   func toZone() -> String {    
     // We are done!!
     var string = "# Yaml File\ntype: Vorobox\n"
-    // Associated code
-    let code = Triangulation.code[zoneVertex.last!]
-    if NoZoneCode != code {
+
       string += "control:\n"
-      string += "  id: \(-code)\n"
-      // string += "  randomDensity: \(2 * (rho ?? 0))\n"
       string += "  showMe: \(showMe)\n"
       string += "  iteration: \(Zone.control.iteration! + 1)\n"
-    }
 
     // Geometry
     string += "objects:\n"
@@ -3561,17 +3467,18 @@ extension Triangulation {
   }
   
   
-  // Convenience function - the point indices of a triangle
-  /* Triangle functions */
-  func pointsOf(triangle t:Int) -> Array<Double> {
-    [Triangulation.coords[2 * vertices[3 * t]],     Triangulation.coords[2 * vertices[3 * t] + 1],
-     Triangulation.coords[2 * vertices[3 * t + 1]], Triangulation.coords[2 * vertices[3 * t + 1] + 1],
-     Triangulation.coords[2 * vertices[3 * t + 2]], Triangulation.coords[2 * vertices[3 * t + 2] + 1]] }
+  // // Convenience function - the point indices of a triangle
+  // /* Triangle functions */
+  // func pointsOf(triangle t:Int) -> Array<Double> {
+  //   [Triangulation.coords[2 * vertices[3 * t]],     Triangulation.coords[2 * vertices[3 * t] + 1],
+  //    Triangulation.coords[2 * vertices[3 * t + 1]], Triangulation.coords[2 * vertices[3 * t + 1] + 1],
+  //    Triangulation.coords[2 * vertices[3 * t + 2]], Triangulation.coords[2 * vertices[3 * t + 2] + 1]] }
 
   // circumcentre of a triangle
-  func triangleCentre(inside edge:Int) -> [Double]  {
-    let points:Array<Double> = pointsOf(triangle: edge/3)
-    return circumCentre(points[0], points[1], points[2], points[3], points[4], points[5])
+  func triangleCentre(inside e:Int) -> [Double]  {
+    return circumCentre(Triangulation.coords[2 * vertices[e]], Triangulation.coords[2 * vertices[e] + 1],
+                        Triangulation.coords[2 * vertices[e + 1]], Triangulation.coords[2 * vertices[e + 1] + 1],
+                        Triangulation.coords[2 * vertices[e + 2]], Triangulation.coords[2 * vertices[e + 2] + 1])
   }
 
   // Logging

@@ -23,8 +23,6 @@ import Foundation
 
 // Control 
 struct Control: Codable {
-  var distinct:Bool? = true
-  var id:Int? = FirstZone
   var iteration:Int? = 0
   var showMe:Int? = 0
 }
@@ -79,10 +77,6 @@ struct Zone: Codable {
   
   // Each zone can have zero or more holes
   var holeIndices = Array<Array<Int>>()
-    
-  // A code which identifies whether a zone is delaunay or voronoi conforming
-  // This is deprecated
-  var code: Int = 1
 
   // Index to find the properties associated with this zone
   var propertyIndex: Int = -1
@@ -93,19 +87,6 @@ extension Zone {
   // Read in a zone defined in a data file
   init(usingData stored: StoredZones.Zone, with arcs:Array<Array<Array<Double>>>) throws {
     var inputZones = Array<Zone>()
-    
-    // Global controls 
-    var distinct = Zone.hullConforming ?? true
-    //showMe = Zone.control.showMe! 
-    
-    // Set the zone code
-    code = 2 * Zone.control.id!
-
-    // Update the code depending on if this zone is distinct or not
-    if distinct { code += 1 } // Code is odd for conforming edges
-    
-    // Set code - when even the zone is Voronoi conforming (the default)
-    Zone.control.id! += 1
 
     // Zone scale (mapped by global scale if reqired)
     // Zones can be referred to a specific origin
@@ -142,6 +123,7 @@ extension Zone {
     // We are given the co-ordinates
     // Only  the first array is needed to construct the boundary
     //
+    var sharedProperties = false
     if let polygons = stored.polygon {
       // Make polygons arrays of vertices
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
@@ -150,13 +132,15 @@ extension Zone {
       propertyIndex = propertyIndices[0]
       inputZones.append(Zone(copy: self, using: [polygons], index: 0, and: arcs))
     } else if let multipolygons = stored.multipolygon {
-      // This is quite straightforward now
+      // This is just a list of polygons; but the polygons may share a single
+      // property definition
       for i in 0..<multipolygons.count {
         // Either the zones share the same property index or they have one each
         if propertyIndices.count == multipolygons.count {
           propertyIndex = propertyIndices[i]
         } else if propertyIndices.count == 1 {
           propertyIndex = propertyIndices[0]
+          sharedProperties = true
         } else {
           // An input file error 
           throw zoneError.initError("Number of multipolygons \(multipolygons.count) doesn't match number of multiproperties \(propertyIndices.count)")
@@ -165,9 +149,9 @@ extension Zone {
         // Obtain convex zones from the input zones
         inputZones.append(Zone(copy: self, using: multipolygons, index: i, and: arcs))
       }
-
     }
 
+    // Reset arc vertices
     for i in 0..<Zone.arcVertices.count {
       Zone.arcVertices[i].removeAll(keepingCapacity: true)
     }
@@ -184,13 +168,26 @@ extension Zone {
       print("Processing \(inputZones.count) zones")
     }
 
-    // Need to ddetermine the fractional area of each convex zone 
-    // in terms of its parent input zone 
+    // Need to determine the fractional area of each convex zone
+    // in terms of its parent input zone
+    // For multipolygons need grand total area if a single shared
+    // property is used
+    var totalArea:Double = 0
+    if sharedProperties {
+      // Need to get the grand total area
+      for z in inputZones {
+        totalArea += z.area
+      }
+    }
+
+    // Process each inuot zone
     for i in 0..<inputZones.count {
       var z = inputZones[i]
 
-      // Sum the total area of this input zone 
-      let totalArea = z.area 
+      // Sum the total area of this input zone
+      if !sharedProperties {
+        totalArea = z.area
+      }
 
       if !z.zoneIndices.isEmpty {
         // Now need to make a list of convex zones
@@ -249,10 +246,6 @@ extension Zone {
 
         // Properties 
         Triangulation.properties.append(propertyIndex)
-
-        // This needs the zone code
-        // Deprecated
-        Triangulation.code.append(code)
         
         // Yes this point is inside this zone
         zoneIndices.append(Triangulation.pointCount)
@@ -329,7 +322,7 @@ extension Zone {
 
         // This needs the zone code
         // Deprecated
-        Triangulation.code.append(code)
+        //Triangulation.code.append(code)
         
         // Set zone index
         zoneIndices.append(Triangulation.pointCount)
@@ -430,9 +423,6 @@ extension Zone {
             
             // Use the zone properties
             Triangulation.properties.append(propertyIndex)
-
-            // Deprecated
-            Triangulation.code.append(NoZoneCode)
             
             // Save the vertex
             Zone.arcVertices[arcIndex].append(Triangulation.pointCount)
@@ -460,14 +450,10 @@ extension Zone {
     // Copy scale and origin 
     scale = zone.scale 
     origin = zone.origin
-    
-    // Add a zone defined by a polygon
-    code = zone.code
 
     // The property index is inherited
     propertyIndex = zone.propertyIndex
 
-    //
     // Use arcs to define points
     let polygons = multipolygons[polyIndex]
 
@@ -522,9 +508,6 @@ extension Zone {
     // Copy scale and origin 
     scale = zone.scale 
     origin = zone.origin
-
-    // clipped zones inherit parent code
-    code = zone.code
     
     // Needed for initialization
     propertyIndex = zone.propertyIndex
@@ -540,17 +523,15 @@ extension Zone {
 
     // We need the area of this clipped zone 
     area = loopArea(zoneIndices)
-
   }
   
   // Need to initialize a zone using just a polygon
-  init(given perimeter: Array<Int>, code boundaryType:Int = -2) {
+  init(given perimeter: Array<Int>) {
     // Lightweight zone
     
     // We have the indices already
     zoneIndices = perimeter
     polygonCount = zoneIndices.count
-    code = -boundaryType
     area = loopArea(perimeter)
 
     // Now need to make a list of convex zones
@@ -1007,30 +988,6 @@ func isInside(boundary indices:Array<Int>, size polygonCount:Int, query_x queryX
   return crossings > 0
 }
 
-// // Is a loop clockwise or anticlockwise?
-// func isClockwise(_ loop:Array<Int>) -> Bool {
-//   // Get the bottom right corner of the loop
-//   let a = loop.min { u, v in
-//     let ux = Triangulation.coords[2 * u], vx = Triangulation.coords[2 * v]
-
-//     if ux != vx { return ux < vx}
-//     let uy = Triangulation.coords[2 * u + 1], vy = Triangulation.coords[2 * v + 1]
-//     return uy < vy
-//   }
-  
-//   // Which index is this
-//   let i = loop.firstIndex(of: a!)
-  
-//   // Get the area of the triangle here
-//   let polygonCount = loop.count
-//   let b = loop[(i! + 1) % polygonCount]
-//   let c = loop[(i! + polygonCount - 1) % polygonCount]
-
-//   return orient(Triangulation.coords[2 * a!], Triangulation.coords[2 * a! + 1],
-//                 Triangulation.coords[2 * b], Triangulation.coords[2 * b + 1],
-//                 Triangulation.coords[2 * c], Triangulation.coords[2 * c + 1]) < 0
-// }
-
 func isClockwise(_ loop:Array<Int>) -> Bool {
   return loopArea(loop) < 0
 }
@@ -1069,7 +1026,7 @@ func triangulateZones(using storedData:StoredZones) throws {
     
   //  Some control settings 
   if let c = storedData.control {
-    Zone.control = Control(distinct: c.distinct ?? true, id: c.id ?? FirstZone, iteration: c.iteration ?? 0, showMe: c.showMe ?? 0)
+    Zone.control = Control(iteration: c.iteration ?? 0, showMe: c.showMe ?? 0)
     showMe = Zone.control.showMe ?? 0
   }
   
@@ -1143,7 +1100,7 @@ func triangulateZones(using storedData:StoredZones) throws {
   for z in convexZoneList {
     // Add the zone to the triangulation
     do {
-      let convexHullNext = try Triangulation.triangulation.addVertices(indices: z.zoneIndices, boundary: z.code)
+      let convexHullNext = try Triangulation.triangulation.addVertices(indices: z.zoneIndices)
       
       // Join convexZones together
       try Triangulation.triangulation.join(loop: convexHullNext)
