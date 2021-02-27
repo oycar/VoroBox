@@ -23,11 +23,10 @@ label = 'Cell Diagram - Size {}'.format(v.n_points - 2)
 write_file = False 
 plotter = pv.Plotter(off_screen=write_file)
 colour_map = cc.glasbey_light
+label = 'Voronoi Cells - Size {}'.format(v.n_cells)
 
-#_ = plotter.add_mesh(v, show_scalar_bar=False, clim=[20,80], above_color='yellow', below_color='blue')
 _ = plotter.add_mesh(v, show_edges=True, line_width=1, show_scalar_bar=False, cmap=colour_map)
-#_ = plotter.add_mesh(v, show_edges=True, show_scalar_bar=False)
-#_ = plotter.show_bounds(xlabel=label, ylabel='')
+_ = plotter.show_bounds(xlabel=label, ylabel='')
 
 if write_file:
   _ = plotter.show(cpos="xy",  screenshot='Plot/' + zone_name + '.png')

@@ -60,9 +60,6 @@ struct StoredZones : Codable {
     // Properties associated with the zone
     var properties: Int?
     var multiproperties: Array<Int>?
-
-    // Ignored
-    var randompoint: Int?
   }
 
 }
@@ -70,18 +67,17 @@ struct StoredZones : Codable {
 // Properties
 struct Properties: Codable {
   // Zone properties
-  var density:Double? = 0
-  var number:Int? = 0
+  var numberPoints:Double? = 0
   var tag:Double? = 0
 }
 
 func mingleProperties(_ p:Int, _ q:Int) -> Int {
   // Create a new mingled properties value 
-  let pd = Zone.propertyList[p].density ?? 0,  qd = Zone.propertyList[q].density ?? 0
+  let pd = Zone.propertyList[p].numberPoints ?? 0,  qd = Zone.propertyList[q].numberPoints ?? 0
   let tag = Double(Zone.propertyList.count)
   
   // Save the properties 
-  Zone.propertyList.append(Properties(density: 0.5 * (pd + qd), tag: tag))
+  Zone.propertyList.append(Properties(numberPoints: 0.5 * (pd + qd), tag: tag))
   
   // Return the index 
   return Zone.propertyList.count - 1

@@ -62,9 +62,11 @@ struct Zone: Codable {
   static var scale:Array<Double> = [1, 1]
   
   // Instance properties
+  // This determines 
+  var area: Double = 0
+
   var origin:Array<Double> = [0, 0]
   var scale:Array<Double> = [1, 1]
-  var randompoint:Int? = 0
 
   // The polygon bounding the zone
   var polygonCount = 0
@@ -94,7 +96,7 @@ extension Zone {
     
     // Global controls 
     var distinct = Zone.hullConforming ?? true
-    showMe = Zone.control.showMe! 
+    //showMe = Zone.control.showMe! 
     
     // Set the zone code
     code = 2 * Zone.control.id!
@@ -181,32 +183,43 @@ extension Zone {
     if showMe > 0 {
       print("Processing \(inputZones.count) zones")
     }
+
+    // Need to ddetermine the fractional area of each convex zone 
+    // in terms of its parent input zone 
     for i in 0..<inputZones.count {
       var z = inputZones[i]
+
+      // Sum the total area of this input zone 
+      let totalArea = z.area 
+
       if !z.zoneIndices.isEmpty {
         // Now need to make a list of convex zones
         try! z.clipZone()
       } // Clipped the zone into convex polygons
     
-      // Convex zones include z
+      // The final convex zone in this input zone is simply z
       z.convexZones.append(z)
       
-      // Add specified points to the zone
+      // Add specified points to the zones
+      var sumArea:Double = 0
       for i in 0..<z.convexZones.count {
         // Add the points - once one is added it need not be considered again
-        specifiedPoints = z.convexZones[i].addPointsToZone(specifiedPoints)
+        specifiedPoints = z.convexZones[i].addPointsToZone(specifiedPoints, area: totalArea)
+        sumArea += z.convexZones[i].area
       }
       
-      // The final convex zone is simply z
+      // Update the master list of all convex zones
       convexZones.append(contentsOf: z.convexZones)
       
       if showMe > 0 {
-        print("Added \(convexZones.count) convex zones")
+        print("Input Zone \(i)")
+        print("\tAdded \(convexZones.count) convex zones")
+        print("\tSummed Area => \(sumArea/totalArea)")
       }
     }
   } // init
  
-  mutating func addPointsToZone(_ pointList: Array<Array<Double>>) -> Array<Array<Double>> {
+  mutating func addPointsToZone(_ pointList: Array<Array<Double>>, area total:Double) -> Array<Array<Double>> {
     // Now we can allocate the points (if any) that are associated with each convex zone
     var newList = Array<Array<Double>>()
     var minX = Double.infinity
@@ -287,11 +300,10 @@ extension Zone {
     // Use the linked properties 
     let properties = Zone.propertyList[propertyIndex]
 
-    // Use properties - is this appropriate?
-    let density = properties.density ?? 0
-    
-    // Number of points is density times box area
-    var n = Int((density * (maxX - minX) * (maxY - minY)).rounded())
+    //  How many extra poits to add
+    // Fractional area 
+    let fractionalArea = area / total 
+    var n = Int((fractionalArea * (properties.numberPoints ?? 0)).rounded())
       
     // Add the points
     nextRandomPoint: while n > 0 {
@@ -322,10 +334,11 @@ extension Zone {
         // Set zone index
         zoneIndices.append(Triangulation.pointCount)
         Triangulation.pointCount += 1
+
+        // Reduce counter conditionally
+        n -= 1
       }
 
-      // Reduce counter
-      n -= 1
     } // Add random points
     
     return newList
@@ -464,7 +477,13 @@ extension Zone {
     var polygon = polyFrom(arcs: polygons.first!, check: polyIndex)
      
     // Check ordering - boundaries should be anticlockwise
-    if isClockwise(polygon) { polygon.reverse() }
+    area = loopArea(polygon)
+
+    // Negative area is a clockwise loop
+    if area < 0 {
+      area = -area 
+      polygon.reverse()
+    }
 
     // The zone
     zoneIndices.append(contentsOf: polygon)
@@ -475,7 +494,15 @@ extension Zone {
         var hole = polyFrom(arcs: polygons[h])
 
         // Check ordering -  holes should be clockwise
-        if !isClockwise(hole) { hole.reverse() }
+        let a = loopArea(hole)
+        if a > 0 {
+          // Holes should be clockwise and have negative area
+          area -= a // Adjust zone area
+          hole.reverse()
+        } else {
+          // Adjust zone area
+          area += a
+        }
 
         // Save this
         holeIndices.append(hole)
@@ -487,10 +514,10 @@ extension Zone {
   }
   
   // Some specialized inits
-  init(clip zone: Zone, ear i:Int, order n:Int) {
+  init(clip zone: Zone, ear i:Int) {
     // This handles the case of convex zones
     // This generates a triangular zone
-    polygonCount = n // Its an n-gon - can be zero
+    polygonCount = 3 // 
     
     // Copy scale and origin 
     scale = zone.scale 
@@ -510,6 +537,10 @@ extension Zone {
       let index = (i + k + zone.polygonCount) % zone.polygonCount
       zoneIndices.append(zone.zoneIndices[index])
     }
+
+    // We need the area of this clipped zone 
+    area = loopArea(zoneIndices)
+
   }
   
   // Need to initialize a zone using just a polygon
@@ -520,7 +551,8 @@ extension Zone {
     zoneIndices = perimeter
     polygonCount = zoneIndices.count
     code = -boundaryType
-    
+    area = loopArea(perimeter)
+
     // Now need to make a list of convex zones
     do {
       try clipZone()
@@ -647,7 +679,10 @@ extension Zone {
         }
         
         // New triangular zone (i-1, i, i+1)
-        let z = Zone(clip: self, ear: i - 1, order: 3)
+        let z = Zone(clip: self, ear: i - 1)
+
+        // Update local area 
+        area -= z.area
         
         // Update this polygon
         zoneIndices.remove(at: i)
@@ -765,6 +800,7 @@ extension Zone {
         
         // OK we just grew the polygon
         polygonCount += 1
+        area += t.area
         
         return self
       }
@@ -971,28 +1007,51 @@ func isInside(boundary indices:Array<Int>, size polygonCount:Int, query_x queryX
   return crossings > 0
 }
 
-// Is a loop clockwise or anticlockwise?
-func isClockwise(_ loop:Array<Int>) -> Bool {
-  // Get the bottom right corner of the loop
-  let a = loop.min { u, v in
-    let ux = Triangulation.coords[2 * u], vx = Triangulation.coords[2 * v]
+// // Is a loop clockwise or anticlockwise?
+// func isClockwise(_ loop:Array<Int>) -> Bool {
+//   // Get the bottom right corner of the loop
+//   let a = loop.min { u, v in
+//     let ux = Triangulation.coords[2 * u], vx = Triangulation.coords[2 * v]
 
-    if ux != vx { return ux < vx}
-    let uy = Triangulation.coords[2 * u + 1], vy = Triangulation.coords[2 * v + 1]
-    return uy < vy
+//     if ux != vx { return ux < vx}
+//     let uy = Triangulation.coords[2 * u + 1], vy = Triangulation.coords[2 * v + 1]
+//     return uy < vy
+//   }
+  
+//   // Which index is this
+//   let i = loop.firstIndex(of: a!)
+  
+//   // Get the area of the triangle here
+//   let polygonCount = loop.count
+//   let b = loop[(i! + 1) % polygonCount]
+//   let c = loop[(i! + polygonCount - 1) % polygonCount]
+
+//   return orient(Triangulation.coords[2 * a!], Triangulation.coords[2 * a! + 1],
+//                 Triangulation.coords[2 * b], Triangulation.coords[2 * b + 1],
+//                 Triangulation.coords[2 * c], Triangulation.coords[2 * c + 1]) < 0
+// }
+
+func isClockwise(_ loop:Array<Int>) -> Bool {
+  return loopArea(loop) < 0
+}
+
+// The area of a loop (using the shoelace equation) 
+func loopArea(_ loop:Array<Int>) -> Double {
+  // Initialize the area 
+  var b = loop.first!, a = loop.last!
+
+  // This term spans the loop end
+  var area = (Triangulation.coords[2 * b] + Triangulation.coords[2 * a]) * (Triangulation.coords[2 * b + 1] - Triangulation.coords[2 * a + 1])
+
+  // Remaning terms do not span the loop end  
+  for i in 0..<(loop.count-1) {
+    a = loop[i]
+    b = loop[i + 1]
+    area += (Triangulation.coords[2 * b] + Triangulation.coords[2 * a]) * (Triangulation.coords[2 * b + 1] - Triangulation.coords[2 * a + 1])
   }
   
-  // Which index is this
-  let i = loop.firstIndex(of: a!)
-  
-  // Get the area of the triangle here
-  let polygonCount = loop.count
-  let b = loop[(i! + 1) % polygonCount]
-  let c = loop[(i! + polygonCount - 1) % polygonCount]
-
-  return orient(Triangulation.coords[2 * a!], Triangulation.coords[2 * a! + 1],
-                Triangulation.coords[2 * b], Triangulation.coords[2 * b + 1],
-                Triangulation.coords[2 * c], Triangulation.coords[2 * c + 1]) < 0
+  // This will be negative for a clockwise loop
+  return 0.5 * area
 }
 
 // Process the input data
@@ -1011,6 +1070,7 @@ func triangulateZones(using storedData:StoredZones) throws {
   //  Some control settings 
   if let c = storedData.control {
     Zone.control = Control(distinct: c.distinct ?? true, id: c.id ?? FirstZone, iteration: c.iteration ?? 0, showMe: c.showMe ?? 0)
+    showMe = Zone.control.showMe ?? 0
   }
   
   // Need to establish a bounding box

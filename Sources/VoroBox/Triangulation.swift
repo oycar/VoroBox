@@ -1536,7 +1536,7 @@ extension Triangulation {
           countHubs += 1
           if countHubs > hubThreshold {
             hubThreshold += hubStep
-            print("Processed \(countHubs) hubs : percentage \(100.0 * Double(countHubs) / numberHubs))")
+            print("Processed \(countHubs) hubs : \(100.0 * Double(countHubs) / numberHubs) %)")
           }          
         }
         
@@ -3512,7 +3512,7 @@ extension Triangulation {
     vtkString += "\nSCALARS properties double 1"
     vtkString += "\nLOOKUP_TABLE default"
     for (_, v) in zoneVertex.enumerated() {
-      let z = Zone.propertyList[Triangulation.properties[v]].tag ?? Zone.propertyList[Triangulation.properties[v]].density
+      let z = Zone.propertyList[Triangulation.properties[v]].tag ?? Zone.propertyList[Triangulation.properties[v]].numberPoints
       vtkString += "\n\(z ?? 0)"
     }
     

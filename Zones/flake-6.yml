@@ -1,6 +1,4 @@
 name: flake-6
-properties:
-  randomDensity: 1
 zones:
   - polygon: [[10.720165, 308.752638],
 [10.000000, 307.505277],

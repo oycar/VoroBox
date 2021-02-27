@@ -32,8 +32,8 @@ arcs: [
 ]
 
 properties: 
-  - density: 1000
-  - density: 10
-  - density: 100
-  - density: 1
-  - density: 10000
+  - numberPoints: 1000
+  - numberPoints: 10
+  - numberPoints: 100
+  - numberPoints: 1
+  - numberPoints: 10000
