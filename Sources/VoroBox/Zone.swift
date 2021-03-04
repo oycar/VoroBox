@@ -25,6 +25,7 @@ import Foundation
 struct Control: Codable {
   var iteration:Int? = 0
   var showMe:Int? = 0
+  var hollow:Bool? = false
 }
 
 struct Transform: Codable {
@@ -123,7 +124,6 @@ extension Zone {
     // We are given the co-ordinates
     // Only  the first array is needed to construct the boundary
     //
-    var sharedProperties = false
     if let polygons = stored.polygon {
       // Make polygons arrays of vertices
       // Each polygon is a [[#boundary_arcs#],[#hole-arcs#],...]
@@ -140,7 +140,6 @@ extension Zone {
           propertyIndex = propertyIndices[i]
         } else if propertyIndices.count == 1 {
           propertyIndex = propertyIndices[0]
-          sharedProperties = true
         } else {
           // An input file error 
           throw zoneError.initError("Number of multipolygons \(multipolygons.count) doesn't match number of multiproperties \(propertyIndices.count)")
@@ -169,26 +168,23 @@ extension Zone {
     }
 
     // Need to determine the fractional area of each convex zone
-    // in terms of its parent input zone
+    // in terms of its parent input zone - 
     // For multipolygons need grand total area if a single shared
     // property is used
-    var totalArea:Double = 0
-    if sharedProperties {
-      // Need to get the grand total area
-      for z in inputZones {
-        totalArea += z.area
+    var totalArea:Double = 0 
+    for z in inputZones {
+      if Zone.propertyList[z.propertyIndex].area == nil {
+        // Initialize area
+        Zone.propertyList[z.propertyIndex].area = z.area 
+      } else {
+        // Add this area 
+        Zone.propertyList[z.propertyIndex].area! += z.area 
       }
     }
 
     // Process each inuot zone
     for i in 0..<inputZones.count {
       var z = inputZones[i]
-
-      // Sum the total area of this input zone
-      if !sharedProperties {
-        totalArea = z.area
-      }
-
       if !z.zoneIndices.isEmpty {
         // Now need to make a list of convex zones
         try! z.clipZone()
@@ -201,17 +197,18 @@ extension Zone {
       var sumArea:Double = 0
       for i in 0..<z.convexZones.count {
         // Add the points - once one is added it need not be considered again
-        specifiedPoints = z.convexZones[i].addPointsToZone(specifiedPoints, area: totalArea)
+        specifiedPoints = z.convexZones[i].addPointsToZone(specifiedPoints, 
+          area: Zone.propertyList[z.propertyIndex].area!)
         sumArea += z.convexZones[i].area
       }
-      
+
       // Update the master list of all convex zones
       convexZones.append(contentsOf: z.convexZones)
       
       if showMe > 0 {
         print("Input Zone \(i)")
         print("\tAdded \(convexZones.count) convex zones")
-        print("\tSummed Area => \(sumArea/totalArea)")
+        print("\tSummed Area => \(sumArea)")
       }
     }
   } // init
@@ -297,7 +294,9 @@ extension Zone {
     // Fractional area 
     let fractionalArea = area / total 
     var n = Int((fractionalArea * (properties.numberPoints ?? 0)).rounded())
-      
+    if let h = Zone.control.hollow {
+      n = 0
+    }  
     // Add the points
     nextRandomPoint: while n > 0 {
       // Add points inside  the zone
@@ -1026,7 +1025,9 @@ func triangulateZones(using storedData:StoredZones) throws {
     
   //  Some control settings 
   if let c = storedData.control {
-    Zone.control = Control(iteration: c.iteration ?? 0, showMe: c.showMe ?? 0)
+    Zone.control = Control(iteration: c.iteration ?? 0, 
+                           showMe: c.showMe ?? 0,
+                           hollow: c.hollow ?? false)
     showMe = Zone.control.showMe ?? 0
   }
   
@@ -1063,32 +1064,20 @@ func triangulateZones(using storedData:StoredZones) throws {
   }
  
   // The objects
-  let objects:Dictionary<String, Array<StoredZones.GeometryCollection>> = storedData.objects
   var convexZoneList = Array<Zone>()
-  for (key, geometryCollection) in objects {
-    // Empty name? 
-    if nil == Zone.name {
-      if let n = storedData.name {
-        Zone.name = n
-      } else { 
-        Zone.name = key 
-      }
-    }
- 
 
-    // Make space for the arcs
-    Zone.arcVertices = Array(repeating: [], count: arcs.count)
+  // Optional name 
+  Zone.name = storedData.name
 
-    // Read each instance
-    for g in geometryCollection {
-      for z in g.geometries {
-        convexZoneList.append(contentsOf:try! Zone(usingData: z, with: arcs).convexZones)
-      }
-    }
+  // Make space for the arcs
+  Zone.arcVertices = Array(repeating: [], count: arcs.count)
+
+  // Read each geometry
+  for z in storedData.geometries {
+    convexZoneList.append(contentsOf:try! Zone(usingData: z, with: arcs).convexZones)
   }
   
   // Now triangulate
-  
   // Make space for all the points
   Triangulation.pointCount = Triangulation.coords.count / 2
   Triangulation.triangulation = Triangulation(size: Triangulation.pointCount)

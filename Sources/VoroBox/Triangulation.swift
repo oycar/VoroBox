@@ -105,7 +105,7 @@ struct Triangulation: Codable {
   // Store all trangulation coordinates
   // The count of points, their co-ordinates
   static var coords = Array<Double>()
-  static var properties = Array<Int>() //  Index of preoperties associated with this vertex
+  static var properties = Array<Int>() //  Index of properties associated with this vertex
   static var pointCount = 0
   
   // The singleton triangulation
@@ -3466,13 +3466,6 @@ extension Triangulation {
     return string
   }
   
-  
-  // // Convenience function - the point indices of a triangle
-  // /* Triangle functions */
-  // func pointsOf(triangle t:Int) -> Array<Double> {
-  //   [Triangulation.coords[2 * vertices[3 * t]],     Triangulation.coords[2 * vertices[3 * t] + 1],
-  //    Triangulation.coords[2 * vertices[3 * t + 1]], Triangulation.coords[2 * vertices[3 * t + 1] + 1],
-  //    Triangulation.coords[2 * vertices[3 * t + 2]], Triangulation.coords[2 * vertices[3 * t + 2] + 1]] }
 
   // circumcentre of a triangle
   func triangleCentre(inside e:Int) -> [Double]  {
@@ -3513,10 +3506,7 @@ func dist(_ ax: (Double), _ ay: (Double),
 }
 
 // Convenience method - use indices as a wrapper
-func insideCircumCircle(vertex p:Int, _ n:Int, _ i:Int, _ q:Int) -> Bool {
-  // We need to flip the edges a-b if the vertex p is inside the circum-circle
-  // of the triangle [n, i, q]
-  
+func insideCircumCircle(vertex p:Int, _ n:Int, _ i:Int, _ q:Int) -> Bool {  
   // Use Shewchuk's robust version of inCircumCircle
   return inCircumCircle(ax: Triangulation.coords[2 * n], ay: Triangulation.coords[2 * n + 1],
                         bx: Triangulation.coords[2 * i], by: Triangulation.coords[2 * i + 1],

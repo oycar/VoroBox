@@ -6,23 +6,20 @@
 type: Vorobox
 control: { showMe: 1 }
 
-objects:
-  square:
+name: "square"
+geometries:
+  - polygon: [[0]]
+    properties: 1
+  - polygon: [[1]]
+    properties: 0
+  - polygon: [[2]]
+    properties: 3
+  - polygon: [[3]]
+    properties: 2
 
-    - type: GeometryCollection
-      geometries:
-        - polygon: [[0]]
-          properties: 1
-        - polygon: [[1]]
-          properties: 0
-        - polygon: [[2]]
-          properties: 3
-        - polygon: [[3]]
-          properties: 2
-
-        - multipolygon: [[[0]], [[1]], [[2]], [[3]]]
-          multiproperties: [2, 3, 0, 1]
-          origin: [4, 0]
+  - multipolygon: [[[0]], [[1]], [[2]], [[3]]]
+    multiproperties: [2, 3, 0, 1]
+    origin: [4, 0]
 
 arcs: [[&0 [0, 0], [1, 0], [1, 1], [0, 1], *0],
        [&1 [0, 1], [1, 1], [1, 2], [0, 2], *1],

@@ -23,24 +23,19 @@ import Foundation
 
 // The Basic structure for JSON IO
 struct StoredZones : Codable {
-  var type:String
-  var objects: Dictionary<String, Array<GeometryCollection>>
+  var type:String?
+  var geometries:Array<Zone>
   var arcs: Array<Array<Array<Double>>>
   var properties: Array<Properties>?
 
   var conformingTo:String?
-  var name:String?
+  var name:String? = "Geometry"
   
   // global properties
   var control: Control?
 
   // Arc transform
   var transform: Transform?
-  
-  struct GeometryCollection : Codable {
-    var type:String
-    var geometries: Array<Zone>
-  }
   
   struct Zone: Codable {
     var origin: Array<Double>?
@@ -61,7 +56,6 @@ struct StoredZones : Codable {
     var properties: Int?
     var multiproperties: Array<Int>?
   }
-
 }
 
 // Properties
@@ -69,6 +63,7 @@ struct Properties: Codable {
   // Zone properties
   var numberPoints:Double? = 0
   var tag:Double? = 0
+  var area:Double? = 0
 }
 
 func mingleProperties(_ p:Int, _ q:Int) -> Int {
