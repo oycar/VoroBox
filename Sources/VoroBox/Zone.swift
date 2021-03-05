@@ -25,7 +25,6 @@ import Foundation
 struct Control: Codable {
   var iteration:Int? = 0
   var showMe:Int? = 0
-  var hollow:Bool? = false
 }
 
 struct Transform: Codable {
@@ -294,9 +293,7 @@ extension Zone {
     // Fractional area 
     let fractionalArea = area / total 
     var n = Int((fractionalArea * (properties.numberPoints ?? 0)).rounded())
-    if let h = Zone.control.hollow {
-      n = 0
-    }  
+ 
     // Add the points
     nextRandomPoint: while n > 0 {
       // Add points inside  the zone
@@ -1026,8 +1023,7 @@ func triangulateZones(using storedData:StoredZones) throws {
   //  Some control settings 
   if let c = storedData.control {
     Zone.control = Control(iteration: c.iteration ?? 0, 
-                           showMe: c.showMe ?? 0,
-                           hollow: c.hollow ?? false)
+                           showMe: c.showMe ?? 0)
     showMe = Zone.control.showMe ?? 0
   }
   

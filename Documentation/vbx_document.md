@@ -6,8 +6,26 @@ _Vorobox_ can read input files which use a modified form of the _topojson_ forma
 
 Consider a the data describing national boundaries, coasylines and lakes from [Natural Earth](). Using Mike Bostock’s excellent [ndjson](https://github.com/mbostock/ndjson-cli) library this file can be filtered to extract the data describing the required countries. In this case let's select those of _Western Europe_ and _Northern Europe_. 
 ```bash
+SCALE=0.001 
 ndjson-split 'd.features' < ne_50m_admin_0_countries_lakes.json > natural_earth.ndjson
+
 ndjson-filter 'd.properties.SUBREGION === "Western Europe" || d.properties.SUBREGION === "Northern Europe"' < natural_earth.ndjson > nw_europe.ndjson
+
+ndjson-map 'd.properties = {nation: d.properties.SOVEREIGNT, id:d.properties.WOE_ID, numberPoints: Math.floor($SCALE * d.properties.POP_EST), name: d.properties.name}, d' < nw_europe.ndjson > nations.ndjson
+
+ndjson-reduce 'p.features.push(d), p' '{type: "FeatureCollection", features: []}' < nations.ndjson > nations.geojson
+
+geoproject 'd3.geoAlbers()
+    .rotate([-20.0, 0.0])
+    .center([0.0, 52.0])
+    .parallels([35.0, 65.0]).reflectY(true)' < nations.geojson > nw_europe.geojson
+
+geo2topo -q 0 nw_europe.geojson > nw_europe.topojson 
+ndjson-split 'd.objects.nw_europe.geometries' < nw_europe.topojson > nw_europe_1.ndjson
+ndjson-split '[{"arcs" : d.arcs}]' < nw_europe.topojson >> nw_europe_1.ndjson
+
+ndjson-reduce < nw_europe_1.ndjson | mkvbx -m nation -s 1 > nw_europe_1.vxjson
+
 ```
 
 The properties list associated with each feature now needs trimming to retain only a few components; namely "POP_EST", "WOE_ID", "NAME", "SOVEREIGNT", and here again _ndjson_ can help

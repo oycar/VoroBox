@@ -578,10 +578,6 @@ extension Triangulation {
     
     // Not empty
     if convexNext.isEmpty { return }
-    //if showMe > 1  {
-      //print("Join Hulls")
-      //showVoronoi(label: "jl_", type: "Delaunay")
-    //}
     
     // Save any matched edges
     var matchedEdges = Dictionary<Int, Int>()
@@ -3435,9 +3431,9 @@ extension Triangulation {
     // We are done!!
     var string = "# Yaml File\ntype: Vorobox\n"
 
-      string += "control:\n"
-      string += "  showMe: \(showMe)\n"
-      string += "  iteration: \(Zone.control.iteration! + 1)\n"
+    string += "control:\n"
+    string += "  showMe: \(showMe)\n"
+    string += "  iteration: \(Zone.control.iteration! + 1)\n"
 
     // Geometry
     string += "objects:\n"
